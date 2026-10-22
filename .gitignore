@@ -37,7 +37,8 @@ obj/
 *.suo
 TestResults/
 *.binlog
-artifacts/
+# Build output at the root only: src/ExportViewer.Core/Artifacts is source (Windows matches names case-insensitively).
+/artifacts/
 .DS_Store
 
 # Claude local settings
