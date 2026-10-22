@@ -1,0 +1,43 @@
+# Weekly update pull requests. Security updates are on as well and follow the same ignore rules.
+# Each PR is reviewed like any other change: CLAUDE.md's package and privacy rules still apply.
+version: 2
+
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    # Give new releases two weeks before proposing them.
+    cooldown:
+      default-days: 14
+    open-pull-requests-limit: 5
+    groups:
+      # The vpk tool (dotnet-tools.json) must match the Velopack package, so they move together.
+      velopack:
+        patterns: ["Velopack", "vpk"]
+      tests:
+        patterns: ["xunit*", "Microsoft.NET.Test.Sdk"]
+    ignore:
+      # 6.2.4 is the last MIT release; 6.5 and later are AGPL. Upgrading needs the owner's approval.
+      - dependency-name: PDFsharp-MigraDoc
+        versions: [">= 6.5"]
+      # Their version comes from the MAUI workload ($(MauiVersion)), not from Directory.Packages.props.
+      - dependency-name: Microsoft.Maui.Controls
+      - dependency-name: Microsoft.AspNetCore.Components.WebView.Maui
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: dotnet-sdk
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
