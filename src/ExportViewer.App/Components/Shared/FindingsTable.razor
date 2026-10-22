@@ -58,7 +58,7 @@ else
                             @if (Link(r) is { } href) { <a href="@href">@r.Title</a> } else { <span>@r.Title</span> }
                         </td>
                         <td class="nowrap">@(r.UserName ?? "")</td>
-                        <td class="nowrap small">@Fmt.Date(r.Timestamp, Expert ? ViewMode.Expert : ViewMode.Basic)</td>
+                        <td class="@(Expert ? "small" : "nowrap small")">@Fmt.Date(r.Timestamp, Expert ? ViewMode.Expert : ViewMode.Basic)</td>
                         @if (Expert) { <td class="mono small">@r.Detector</td> }
                     </tr>
                 }

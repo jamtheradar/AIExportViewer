@@ -16,8 +16,8 @@ public static class SearchKind
 }
 
 /// <summary>
-/// Writes records into the library inside one transaction. Every write is an upsert that follows the merge rules in
-/// docs/plan.md section 2, so files from overlapping exports can be loaded in any order.
+/// Writes records into the library inside one transaction. Every write is an upsert, so files from overlapping
+/// exports can be loaded in any order.
 /// </summary>
 internal sealed class LibraryWriter : IDisposable
 {

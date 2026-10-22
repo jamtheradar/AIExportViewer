@@ -8,7 +8,11 @@
     </div>
 </div>
 
-@if (_items.Count == 0)
+@if (!Session.IsReady)
+{
+    <NoExport What="its projects" />
+}
+else if (_items.Count == 0)
 {
     <div class="empty">No projects in this export.</div>
 }

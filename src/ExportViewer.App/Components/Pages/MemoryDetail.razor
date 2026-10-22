@@ -3,16 +3,23 @@
 
 @if (_m is null)
 {
-    <div class="empty">@(Session.IsReady ? "There is no memory for this person in the export." : "Open an export first.")</div>
+    if (Session.IsReady)
+    {
+        <div class="empty">There is no memory for this person in the export.</div>
+    }
+    else
+    {
+        <NoExport What="this memory" />
+    }
     return;
 }
 
+<BackButton Fallback="memories" />
 <div class="page-head">
     <div>
         <h1>What Claude remembers about @(_name ?? "this person")</h1>
         <p class="subtle">Saved memory as of @When(_m.SnapshotAt)</p>
     </div>
-    <button @onclick='() => Nav.NavigateTo("memories")'>Back to memories</button>
 </div>
 
 @if (Expert && _snapshots.Count > 1)
@@ -35,7 +42,7 @@ else if (_snapshots.Count > 1)
 
 @if (!string.IsNullOrWhiteSpace(_m.ConversationsMemory))
 {
-    <div class="card"><h2 style="margin-top:0">Summary memory</h2><SafeHtml Text="@_m.ConversationsMemory" /></div>
+    <div class="card"><h2>Summary memory</h2><SafeHtml Text="@_m.ConversationsMemory" /></div>
 }
 
 @if (_m.Files.Count > 0)

@@ -29,7 +29,7 @@
             <tbody>
                 @foreach (var i in _issues)
                 {
-                    <tr><td class="mono small">@(i.Path ?? "—")</td><td>@i.Message</td></tr>
+                    <tr><td class="path">@(i.Path ?? "—")</td><td>@i.Message</td></tr>
                 }
             </tbody>
         </table>
@@ -69,7 +69,7 @@ else if (Session.IsReady)
                 @foreach (var f in _files)
                 {
                     <tr>
-                        <td class="mono small">@f.Path</td>
+                        <td class="path">@f.Path</td>
                         <td>@KindLabel(f.Kind)@(f.Collection is null ? "" : $" ({f.Collection})")</td>
                         <td class="num">@Fmt.N(f.Records)</td>
                         <td class="num">@Fmt.N(f.Skipped)</td>

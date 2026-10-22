@@ -6,19 +6,24 @@
     <div class="brand">AI Export Viewer<small>Claude organisation export</small></div>
 
     <NavLink href="" Match="NavLinkMatch.All">Home</NavLink>
+    <NavLink href="download">Download an export</NavLink>
     <div class="section">Review</div>
+    @if (!Session.IsReady)
+    {
+        <p class="nav-hint">Open an export from Home to use these.</p>
+    }
     <NavLink href="overview" class="@Disabled">Overview</NavLink>
-    <NavLink href="users" class="@Disabled">Users</NavLink>
+    <NavLink href="users" class="@Disabled">People</NavLink>
     <NavLink href="conversations" class="@Disabled">Conversations</NavLink>
     <NavLink href="projects" class="@Disabled">Projects</NavLink>
-    <NavLink href="memories" class="@Disabled">Memories</NavLink>
-    <NavLink href="artifacts" class="@Disabled">Artifacts &amp; pages</NavLink>
+    <NavLink href="memories" class="@Disabled">What Claude remembers</NavLink>
+    <NavLink href="artifacts" class="@Disabled">Documents &amp; pages</NavLink>
     @if (View.IsExpert)
     {
         <NavLink href="other" class="@Disabled">Other data</NavLink>
+        <NavLink href="library" class="@Disabled">Files loaded</NavLink>
     }
     <NavLink href="search" class="@Disabled">Search</NavLink>
-    <NavLink href="library" class="@Disabled">Files loaded</NavLink>
     <div class="section">Audit</div>
     <NavLink href="sensitive" class="@Disabled">Sensitive data</NavLink>
     <NavLink href="watchlists" class="@Disabled">Watchlists</NavLink>

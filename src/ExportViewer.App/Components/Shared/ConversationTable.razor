@@ -3,7 +3,7 @@
 
 @if (Items.Count == 0)
 {
-    <div class="empty">No conversations match.</div>
+    <div class="empty">No conversations match these filters.</div>
 }
 else
 {
@@ -16,7 +16,7 @@ else
                     @if (Expert) { <th>Started</th> }
                     <th>Last message</th>
                     <th class="num">Messages</th>
-                    <th>Notes</th>
+                    <th>Details</th>
                     @if (Expert) { <th>ID</th> }
                 </tr>
             </thead>
@@ -29,8 +29,8 @@ else
                             @if (_flagged.Contains(c.Uuid)) { <span class="flag-mark" title="You flagged this conversation or a message in it">⚑</span> }
                         </td>
                         @if (ShowUser) { <td class="nowrap">@(c.UserName ?? "Unknown person")</td> }
-                        @if (Expert) { <td class="nowrap small">@Fmt.Date(c.FirstMessageAt, ViewMode.Expert)</td> }
-                        <td class="nowrap @(Expert ? "small" : "")">@Fmt.Date(c.LastMessageAt, Expert ? ViewMode.Expert : ViewMode.Basic)</td>
+                        @if (Expert) { <td class="small">@Fmt.Date(c.FirstMessageAt, ViewMode.Expert)</td> }
+                        <td class="@(Expert ? "small" : "nowrap")">@Fmt.Date(c.LastMessageAt, Expert ? ViewMode.Expert : ViewMode.Basic)</td>
                         <td class="num">
                             @Fmt.N(c.MessageCount)
                             @if (Expert && c.TotalMessages != c.MessageCount) { <span class="muted small"> / @Fmt.N(c.TotalMessages)</span> }
@@ -38,8 +38,8 @@ else
                         <td>
                             <div style="display:flex;gap:.3rem;flex-wrap:wrap">
                                 <StatusBadge Severity="c.Integrity" />
-                                @if (c.Traits.HasFlag(MessageTraits.HasAttachments) || c.Traits.HasFlag(MessageTraits.HasFiles)) { <span class="tag">Files</span> }
-                                @if (c.Traits.HasFlag(MessageTraits.HasToolUse)) { <span class="tag">Tools</span> }
+                                @if (c.Traits.HasFlag(MessageTraits.HasAttachments) || c.Traits.HasFlag(MessageTraits.HasFiles)) { <span class="tag" title="Someone attached or uploaded a file">Has files</span> }
+                                @if (c.Traits.HasFlag(MessageTraits.HasToolUse)) { <span class="tag" title="Claude searched the web or used another tool">Used tools</span> }
                                 @if (c.ForkCount > 0) { <span class="tag" title="Messages were edited or replies retried">Edited</span> }
                             </div>
                         </td>

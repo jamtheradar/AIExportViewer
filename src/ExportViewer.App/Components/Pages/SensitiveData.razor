@@ -31,26 +31,12 @@
     }
 
     <div class="filters" role="search">
-        <label>Type
-            <select @bind="_type" @bind:after="Apply">
-                <option value="">All types</option>
-                @foreach (var c in _counts) { <option value="@c.Type">@AuditLabels.Type(c.Type)</option> }
-            </select>
-        </label>
         <label>Person
             <select @bind="_user" @bind:after="Apply">
                 <option value="">Everyone</option>
                 @foreach (var u in _users) { <option value="@u.Uuid">@u.DisplayName</option> }
             </select>
         </label>
-        <label>Where
-            <select @bind="_location" @bind:after="Apply">
-                <option value="">Anywhere</option>
-                @foreach (var l in Locations) { <option value="@l">@AuditLabels.Location(l)</option> }
-            </select>
-        </label>
-        <label>From <input type="date" @bind="_from" @bind:after="Apply" /></label>
-        <label>To <input type="date" @bind="_to" @bind:after="Apply" /></label>
         <label>How sure
             <select @bind="_sure" @bind:after="ApplyAndCount">
                 <option value="@Confidence.High">Likely only</option>
@@ -58,7 +44,28 @@
                 <option value="@Confidence.Low">Everything, including unsure</option>
             </select>
         </label>
+        <div class="filter-links">
+            <button class="link" @onclick="() => _more = !_more" aria-expanded="@(_more ? "true" : "false")">@(_more ? "Fewer filters" : "More filters")@(HiddenActive > 0 ? $" ({HiddenActive} on)" : "")</button>
+            @if (AnyActive) { <button class="link" @onclick="Clear">Clear filters</button> }
+        </div>
     </div>
+    @if (_more)
+    {
+        <div class="filters more-filters">
+            <label>Found in
+                <select @bind="_location" @bind:after="Apply">
+                    <option value="">Anywhere</option>
+                    @foreach (var l in Locations) { <option value="@l">@AuditLabels.Location(l)</option> }
+                </select>
+            </label>
+            <label>From <input type="date" @bind="_from" @bind:after="Apply" /></label>
+            <label>To <input type="date" @bind="_to" @bind:after="Apply" /></label>
+        </div>
+    }
+    @if (_type.Length > 0)
+    {
+        <p class="small">Showing <strong>@AuditLabels.Type(_type)</strong> only. <button class="link" @onclick="() => ToggleType(_type)">Show all types</button></p>
+    }
 
     @if (_sure > Confidence.Low && _hidden > 0)
     {
@@ -89,11 +96,36 @@
     private int _hidden;
     private int _auditVersion = -1;
 
+    private sealed record Place(string Type, string User, string Location, DateTime? From, DateTime? To, Confidence Sure, int Offset);
+
+    private string PlaceKey => "sensitive?" + ConversationParam;
+
     protected override void OnInitialized()
     {
         base.OnInitialized();
         Audit.Changed += OnAuditChanged;
+        if (Recall<Place>(PlaceKey) is { } p)
+            (_type, _user, _location, _from, _to, _sure, _offset) = (p.Type, p.User, p.Location, p.From, p.To, p.Sure, p.Offset);
+        // Filters that are on stay visible, so the list is never narrowed by something the reviewer can't see.
+        _more = HiddenActive > 0;
     }
+
+    private bool _more;
+
+    /// <summary>Filters tucked under "More filters" that are switched on.</summary>
+    private int HiddenActive => (_location.Length > 0 ? 1 : 0) + (_from is not null ? 1 : 0) + (_to is not null ? 1 : 0);
+
+    private bool AnyActive => HiddenActive > 0 || _type.Length > 0 || _user.Length > 0 || _sure != Confidence.Medium;
+
+    private void Clear()
+    {
+        _type = _user = _location = "";
+        _from = _to = null;
+        _sure = Confidence.Medium;
+        ApplyAndCount();
+    }
+
+    protected override void SavePlace() => Remember(PlaceKey, new Place(_type, _user, _location, _from, _to, _sure, _offset));
 
     protected override void LoadData()
     {
@@ -164,6 +196,11 @@
     {
         if (!Session.IsReady) return;
         (_total, _rows) = Session.Audit.GetFindings(Filter(50, _offset));
+        if (ClampOffset(_offset, _total, 50) is var clamped && clamped != _offset)
+        {
+            _offset = clamped;
+            Query();
+        }
     }
 
     private Report BuildReport()

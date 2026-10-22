@@ -1,0 +1,12 @@
+@* Shown on screens that need an export when none is open, with the way to open one. *@
+@inject NavigationManager Nav
+
+<div class="empty">
+    <p><strong>No export is open.</strong></p>
+    <p>Open one from the Home page to see @What.</p>
+    <button class="primary" @onclick='() => Nav.NavigateTo("")'>Go to Home</button>
+</div>
+
+@code {
+    [Parameter] public string What { get; set; } = "it here";
+}

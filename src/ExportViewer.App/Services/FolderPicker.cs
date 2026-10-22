@@ -1,6 +1,6 @@
 namespace ExportViewer.App.Services;
 
-/// <summary>Native "choose a folder" and "choose zip files" dialogs. Return null when the user cancels.</summary>
+/// <summary>Native "choose a folder", "choose zip files" and "choose the manifest" dialogs. Return null when the user cancels.</summary>
 public sealed class FolderPicker
 {
 #if WINDOWS
@@ -30,6 +30,19 @@ public sealed class FolderPicker
         return files is { Count: > 0 } ? files.Select(f => f.Path).ToList() : null;
     }
 
+    public async Task<string?> PickManifestAsync()
+    {
+        var picker = new Windows.Storage.Pickers.FileOpenPicker
+        {
+            SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.Downloads,
+            ViewMode = Windows.Storage.Pickers.PickerViewMode.List,
+        };
+        picker.FileTypeFilter.Add(".json");
+        if (!Attach(picker)) return null;
+        var file = await picker.PickSingleFileAsync();
+        return file?.Path;
+    }
+
     internal static bool Attach(object picker)
     {
         var window = Application.Current?.Windows.FirstOrDefault()?.Handler?.PlatformView as MauiWinUIWindow;
@@ -41,6 +54,8 @@ public sealed class FolderPicker
     public async Task<string?> PickAsync() => (await Pick([UniformTypeIdentifiers.UTTypes.Folder], false))?.FirstOrDefault();
 
     public Task<IReadOnlyList<string>?> PickZipsAsync() => Pick([UniformTypeIdentifiers.UTTypes.Zip, UniformTypeIdentifiers.UTTypes.Json], true);
+
+    public async Task<string?> PickManifestAsync() => (await Pick([UniformTypeIdentifiers.UTTypes.Json], false))?.FirstOrDefault();
 
     private static Task<IReadOnlyList<string>?> Pick(UniformTypeIdentifiers.UTType[] types, bool many)
     {
@@ -63,5 +78,7 @@ public sealed class FolderPicker
     public Task<string?> PickAsync() => Task.FromResult<string?>(null);
 
     public Task<IReadOnlyList<string>?> PickZipsAsync() => Task.FromResult<IReadOnlyList<string>?>(null);
+
+    public Task<string?> PickManifestAsync() => Task.FromResult<string?>(null);
 #endif
 }

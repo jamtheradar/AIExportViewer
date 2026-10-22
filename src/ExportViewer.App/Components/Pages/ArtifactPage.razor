@@ -4,10 +4,18 @@
 
 @if (_a is null)
 {
-    <div class="empty">@(Session.IsReady ? "This artifact is not in the export." : "Open an export first.")</div>
+    if (Session.IsReady)
+    {
+        <div class="empty">This artifact is not in the export.</div>
+    }
+    else
+    {
+        <NoExport What="this document" />
+    }
     return;
 }
 
+<BackButton Fallback="artifacts" />
 <div class="page-head">
     <div>
         <h1>@(_a.Summary.Title ?? "(untitled)")</h1>
@@ -16,7 +24,6 @@
             · @Artifacts.VisibilityLabel(_a.Summary.Visibility) · updated @When(_a.Summary.UpdatedAt)
         </p>
     </div>
-    <button @onclick='() => Nav.NavigateTo("artifacts")'>Back to list</button>
 </div>
 
 @if (_a.PageMarkdown is not null)
@@ -105,7 +112,7 @@ else if (_a.Summary.VersionsWithContent == 0)
             {
                 <div class="card">
                     <div class="chart-tools">
-                        <strong class="mono small">@_file.Path</strong>
+                        <strong class="path">@_file.Path</strong>
                         <span class="small muted">
                             @(_file.Size is { } s ? Fmt.Bytes(s) : "")
                             @if (Expert && _file.MimeType is not null) { <span> · @_file.MimeType</span> }

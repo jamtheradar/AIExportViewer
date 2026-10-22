@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/ExportViewer.App/ExportViewer.App.csproj" />
     <Project Path="src/ExportViewer.Core/ExportViewer.Core.csproj" />
+    <Project Path="src/ExportViewer.Download/ExportViewer.Download.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/ExportViewer.Core.Tests/ExportViewer.Core.Tests.csproj" />

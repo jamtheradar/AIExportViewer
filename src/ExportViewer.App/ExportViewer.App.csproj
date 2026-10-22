@@ -38,6 +38,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\ExportViewer.Core\ExportViewer.Core.csproj" />
+        <ProjectReference Include="..\ExportViewer.Download\ExportViewer.Download.csproj" />
     </ItemGroup>
 
 </Project>

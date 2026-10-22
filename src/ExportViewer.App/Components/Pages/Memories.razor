@@ -3,12 +3,16 @@
 
 <div class="page-head">
     <div>
-        <h1>Memories</h1>
+        <h1>What Claude remembers</h1>
         <p class="subtle">What Claude has saved about each person to use in later conversations.</p>
     </div>
 </div>
 
-@if (_people.Count == 0)
+@if (!Session.IsReady)
+{
+    <NoExport What="what Claude remembers" />
+}
+else if (_people.Count == 0)
 {
     <div class="empty">No memories in this export.</div>
 }

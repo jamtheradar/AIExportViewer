@@ -3,8 +3,10 @@
 @inject LibrarySession Session
 @inject ViewModeService View
 @inject ExternalLinks Links
+@inject ManifestDownloads Downloads
 @inject FolderPicker Picker
 @inject IJSRuntime JS
+@inject AppSettings Settings
 @inject NavigationManager Nav
 
 <div class="shell">
@@ -31,7 +33,14 @@
                 <button class="@(View.IsExpert ? "" : "on")" @onclick="() => View.Set(ViewMode.Basic)" title="Show what a reviewer needs">Basic</button>
                 <button class="@(View.IsExpert ? "on" : "")" @onclick="() => View.Set(ViewMode.Expert)" title="Show every field in the export">Expert</button>
             </div>
-            <span class="offline" title="This app never connects to the internet. Everything stays on this computer.">Offline</span>
+            @if (Downloads.IsDownloading)
+            {
+                <span class="offline online" title="Downloading export files from claude.ai because you asked. The app goes back offline when it finishes.">Downloading from claude.ai</span>
+            }
+            else
+            {
+                <span class="offline" title="The app only connects to the internet when you ask it to download an export from claude.ai. Everything else stays on this computer.">Offline</span>
+            }
         </header>
         <div class="main-scroll">
             <div class="page">
@@ -53,6 +62,7 @@
     {
         Session.Changed += OnChanged;
         View.Changed += OnChanged;
+        Downloads.Changed += OnChanged;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -61,6 +71,8 @@
         _linksRef = DotNetObjectReference.Create(Links);
         _selfRef = DotNetObjectReference.Create(this);
         await JS.InvokeVoidAsync("aiev.init", _linksRef, _selfRef);
+        if (Settings.Data.Theme == ColourTheme.Dark)
+            await JS.InvokeVoidAsync("aiev.setTheme", "dark");
     }
 
     private void OnSearchKey(KeyboardEventArgs e)
@@ -84,6 +96,7 @@
     {
         Session.Changed -= OnChanged;
         View.Changed -= OnChanged;
+        Downloads.Changed -= OnChanged;
         _linksRef?.Dispose();
         _selfRef?.Dispose();
     }

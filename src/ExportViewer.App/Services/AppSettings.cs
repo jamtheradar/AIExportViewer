@@ -5,6 +5,9 @@ namespace ExportViewer.App.Services;
 
 public enum ViewMode { Basic, Expert }
 
+/// <summary>Colours. Light is the default whatever the computer is set to, because most reviewers expect it.</summary>
+public enum ColourTheme { Light, Dark }
+
 /// <param name="Path">The library folder, or for zip files the folder they are in.</param>
 /// <param name="Zips">The zip (and manifest) files when the library was opened from zips; null for an unzipped folder.</param>
 public sealed record RecentLibrary(string Path, DateTimeOffset LastOpened, List<string>? Zips = null);
@@ -12,6 +15,7 @@ public sealed record RecentLibrary(string Path, DateTimeOffset LastOpened, List<
 public sealed class SettingsData
 {
     public ViewMode DefaultViewMode { get; set; } = ViewMode.Basic;
+    public ColourTheme Theme { get; set; } = ColourTheme.Light;
     public bool MemoryOnly { get; set; }
     public bool LoggingEnabled { get; set; }
     public List<RecentLibrary> Recent { get; set; } = [];

@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>ExportViewer.Download</RootNamespace>
+    <!--
+      Privacy rule: the only project allowed to use the network. It downloads export zip files from claude.ai when
+      the user asks, and nothing else. PrivacyGuardTests checks no other project sets this.
+    -->
+    <AllowNetworkAccess>true</AllowNetworkAccess>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ExportViewer.Core\ExportViewer.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ExportViewer.Core.Tests" />
+  </ItemGroup>
+
+</Project>

@@ -47,7 +47,7 @@ public static class AuditLabels
         SearchKind.Project => "Project details",
         SearchKind.ProjectDoc => "Project document",
         SearchKind.Memory => "Memory",
-        SearchKind.Artifact => "Artifact or page",
+        SearchKind.Artifact => "Document or page",
         FindingLocation.UserDetails => "User details",
         FindingLocation.SignIn => "Sign-in record",
         _ => location,

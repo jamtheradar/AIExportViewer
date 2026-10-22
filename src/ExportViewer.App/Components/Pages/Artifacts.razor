@@ -3,12 +3,16 @@
 
 <div class="page-head">
     <div>
-        <h1>Artifacts &amp; pages</h1>
-        <p class="subtle">Things people made with Claude: documents (pages), slide decks, designs and small apps.</p>
+        <h1>Documents &amp; pages</h1>
+        <p class="subtle">Things people made with Claude: documents, slide decks, designs and small apps. Claude calls some of these “artifacts”.</p>
     </div>
 </div>
 
-@if (_items.Count == 0)
+@if (!Session.IsReady)
+{
+    <NoExport What="its documents and pages" />
+}
+else if (_items.Count == 0)
 {
     <div class="empty">No artifacts or pages in this export.</div>
 }

@@ -134,11 +134,17 @@
     private IReadOnlyList<WatchlistError> _errors = [];
     private Watchlist? _confirmDelete;
 
+    private sealed record Place(string List, string User, DateTime? From, DateTime? To, int Offset);
+
     protected override void OnInitialized()
     {
         base.OnInitialized();
         Audit.Changed += OnAuditChanged;
+        if (Recall<Place>("watchlists") is { } p)
+            (_list, _user, _from, _to, _offset) = (p.List, p.User, p.From, p.To, p.Offset);
     }
+
+    protected override void SavePlace() => Remember("watchlists", new Place(_list, _user, _from, _to, _offset));
 
     protected override void LoadData()
     {
@@ -219,6 +225,11 @@
     {
         if (!Session.IsReady) return;
         (_total, _rows) = Session.Audit.GetFindings(Filter(50, _offset));
+        if (ClampOffset(_offset, _total, 50) is var clamped && clamped != _offset)
+        {
+            _offset = clamped;
+            Query();
+        }
     }
 
     private Report BuildReport()

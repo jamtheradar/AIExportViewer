@@ -43,7 +43,8 @@ The export arrives as a **manifest JSON** plus **one zip per category per part**
 }
 ```
 
-- Download host observed: **`claude.ai`** only (path `/export/...`). Whether the URL works without a logged-in browser session is **untested**. Phase 3 depends on this.
+- Download host observed: **`claude.ai`** only (path `/export/<org-uuid>/<8 digits>/<32 hex>`, no query string). Whether the URL works without a logged-in browser session is **untested**. Phase 3's in-app download depends on this.
+- `instructions` says each link **expires 24 hours after `created_at`** and **may stop working once used**. The app uses `created_at` + 24 h as the expiry. Treat a link as a password while it is live: never log or store it.
 - No sizes and no checksums are given for the zips, so a download can only be checked by opening the zip successfully.
 - The org UUID appears in the file name and URL; no org display name is present.
 

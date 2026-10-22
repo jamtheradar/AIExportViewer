@@ -3,13 +3,17 @@
 
 <div class="page-head">
     <div>
-        <h1>Users</h1>
+        <h1>People</h1>
         <p class="subtle">Everyone in the export, most active first.</p>
     </div>
     <input type="search" placeholder="Filter by name or email" @bind="_filter" @bind:event="oninput" aria-label="Filter people" />
 </div>
 
-@if (_users.Count == 0)
+@if (!Session.IsReady)
+{
+    <NoExport What="the people in it" />
+}
+else if (_users.Count == 0)
 {
     <div class="empty">No people in this export.</div>
 }
@@ -49,6 +53,10 @@ else
             </tbody>
         </table>
     </div>
+    @if (Filtered.Any(u => !u.InUserList))
+    {
+        <p class="small subtle"><span class="tag">Not in user list</span> means the person appears in conversations but not in the export's list of users.</p>
+    }
 }
 
 @code {
@@ -59,6 +67,14 @@ else
         ? _users
         : _users.Where(u => u.DisplayName.Contains(_filter, StringComparison.CurrentCultureIgnoreCase)
                             || (u.Email?.Contains(_filter, StringComparison.CurrentCultureIgnoreCase) ?? false));
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        _filter = Recall<string>("users") ?? "";
+    }
+
+    protected override void SavePlace() => Remember("users", _filter);
 
     protected override void LoadData() => _users = Session.Queries.GetUsers();
 }

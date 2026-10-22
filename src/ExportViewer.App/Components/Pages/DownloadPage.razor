@@ -1,0 +1,328 @@
+@page "/download"
+@inherits PageBase
+@inject ManifestDownloads Downloads
+@inject ExternalLinks Links
+@inject FolderPicker Picker
+@using ExportViewer.Core.Sources
+
+<div class="page-head">
+    <div>
+        <h1>Download an export</h1>
+        <p class="subtle">An export comes as a small manifest file (named like <span class="path">manifest-….json</span>) with a download link for each zip file.
+            Choose the manifest here and the app downloads the files from claude.ai, then opens them.</p>
+    </div>
+</div>
+
+@if (_error is { } error)
+{
+    <div class="banner high" role="alert">@error</div>
+}
+
+<div class="card">
+    <h2>1. Choose the manifest</h2>
+    @if (Downloads.ManifestPath is { } path)
+    {
+        <p class="path">@(Expert ? path : Path.GetFileName(path))</p>
+    }
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+        <button class="@(Downloads.Manifest is null ? "primary" : "")" @onclick="PickManifestAsync" disabled="@(_busy || Downloads.IsDownloading)">Choose manifest…</button>
+        <input type="text" style="flex:1;min-width:260px" placeholder="…or paste the manifest's path here" @bind="_path" @bind:event="oninput" @onkeydown="OnKey" aria-label="Manifest path" />
+        <button @onclick="() => LoadAsync(_path)" disabled="@(_busy || Downloads.IsDownloading || string.IsNullOrWhiteSpace(_path))">Read</button>
+    </div>
+</div>
+
+@if (Downloads.Manifest is { } m)
+{
+    var now = DateTimeOffset.Now;
+    var expired = m.LinksExpired(now);
+    var ready = Downloads.Found.Count(f => f.State == DownloadedState.Ready);
+    var toDownload = Downloads.ToDownload().Count;
+
+    @if (expired)
+    {
+        <div class="banner high" role="alert">
+            <strong>These download links have expired.</strong> They stopped working on @(m.LinksExpireAt is { } e ? Fmt.Date(e, Mode) : "").
+            Ask the person who manages your organisation's Claude account to request a new export, then choose its new manifest.
+            Files you have already downloaded can still be opened below.
+        </div>
+    }
+    else if (m.LinksExpireAt is { } until)
+    {
+        var left = until - now;
+        <div class="banner @(left < TimeSpan.FromHours(2) ? "medium" : "info")">
+            The download links stop working at <strong>@Fmt.Date(until, Mode)</strong> (@Remaining(left) from now).
+            Each link may only work once, so let each download finish.
+        </div>
+    }
+    else
+    {
+        <div class="banner medium">The manifest doesn't say when it was made. Download links usually work for 24 hours and may only work once.</div>
+    }
+
+    @if (Expert && m.TotalFiles is { } total && total != m.Files.Count)
+    {
+        <div class="banner low">The manifest says it has @Fmt.Plural(total, "file", "files") but lists @Fmt.N(m.Files.Count).</div>
+    }
+
+    <div class="card">
+        <h2>2. Download the files</h2>
+        <p>The files are saved in this folder. The app ticks each one off when it has finished downloading:</p>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:.8rem">
+            <span class="path" style="flex:1;min-width:260px">@(Downloads.Folder ?? "No folder chosen")</span>
+            <button @onclick="PickFolderAsync" disabled="@(_busy || Downloads.IsDownloading)">Choose a different folder…</button>
+            <button @onclick="CheckNowAsync" disabled="@_busy">Check again</button>
+        </div>
+
+        @if (Downloads.IsDownloading)
+        {
+            var p = Downloads.Progress;
+            <div class="banner info" role="status" aria-live="polite">
+                <strong>Downloading from claude.ai@(p is null ? "…" : $": file {p.FileNumber} of {p.FileCount}, {p.FileName}")</strong>
+                @if (p is { Bytes: > 0 })
+                {
+                    <div class="small">@Fmt.Bytes(p.Bytes)@(p.TotalBytes is { } t and > 0 ? $" of {Fmt.Bytes(t)} ({p.Bytes * 100 / t}%)" : "")</div>
+                }
+                <div style="margin-top:.5rem"><button @onclick="Downloads.CancelDownload">Cancel</button></div>
+            </div>
+        }
+        else if (!expired && toDownload > 0)
+        {
+            <div style="display:flex;gap:.8rem;align-items:center;flex-wrap:wrap;margin-bottom:.6rem">
+                <button class="primary" @onclick="DownloadAllAsync" disabled="@_busy">@DownloadLabel(toDownload, m.Files.Count)</button>
+                <span class="small muted">The app connects to claude.ai only to fetch these files, one at a time. No sign-in details are sent.</span>
+            </div>
+        }
+        <p class="small muted" style="margin-top:0">If a file won't download in the app, use “Download in browser” for it. If your browser saves downloads somewhere else (usually your Downloads folder), choose that folder above.</p>
+
+        <div class="table-wrap">
+            <table class="data">
+                <thead>
+                    <tr>
+                        <th>What it contains</th>
+                        <th>File</th>
+                        <th>Status</th>
+                        @if (Expert) { <th>Batch</th><th>Category</th><th>Part</th><th>Download link</th> }
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var f in m.Files)
+                    {
+                        var found = Downloads.Found.FirstOrDefault(x => x.File == f);
+                        var state = found?.State ?? DownloadedState.Missing;
+                        <tr>
+                            <td>@Describe(f.Category)</td>
+                            <td class="path">@f.FileName</td>
+                            <td>
+                                @if (f.Problem is { } problem && state != DownloadedState.Ready)
+                                {
+                                    <span class="status high">@problem</span>
+                                }
+                                else if (Downloads.IsDownloading && Downloads.Progress?.FileName == f.FileName)
+                                {
+                                    <span class="status waiting">Downloading…</span>
+                                }
+                                else if (state != DownloadedState.Ready && Downloads.Problems.TryGetValue(f.FileName, out var failed))
+                                {
+                                    <span class="status medium">Not downloaded</span>
+                                    <div class="small" style="white-space:normal;max-width:28rem">@failed</div>
+                                }
+                                else
+                                {
+                                    <span class="status @StateClass(state)">@StateLabel(f, state)</span>
+                                }
+                                @if (Expert && found?.Path is { } p)
+                                {
+                                    <div class="path">@p</div>
+                                }
+                            </td>
+                            @if (Expert)
+                            {
+                                <td class="num">@f.Index</td>
+                                <td class="mono small">@f.Category</td>
+                                <td class="num">@(f.Part?.ToString() ?? "—")</td>
+                                <td class="mono small" style="overflow-wrap:anywhere;max-width:22rem">@(f.Url?.AbsoluteUri ?? "—")</td>
+                            }
+                            <td class="num nowrap">
+                                @if (f.Url is not null && state is not (DownloadedState.Ready or DownloadedState.InProgress) && !expired && !Downloads.IsDownloading)
+                                {
+                                    <button @onclick="() => Links.RequestDownload(f)">
+                                        @(Downloads.Opened.Contains(f.FileName) ? "Download in browser again" : "Download in browser")
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>3. Open the export</h2>
+        @if (ready == 0)
+        {
+            <p class="muted">Nothing has been downloaded yet.</p>
+        }
+        else
+        {
+            <p>@(ready == m.Files.Count ? "Every file has been downloaded." : $"{Fmt.Plural(ready, "file has", "files have")} been downloaded so far, out of {Fmt.N(m.Files.Count)}.")
+                They are unzipped into the app's own folder while you review them. The downloaded files are only read, never changed.</p>
+            <button class="@(ready == m.Files.Count ? "primary" : "")" @onclick="OpenAsync" disabled="@(_busy || Downloads.IsDownloading)">
+                @(ready == m.Files.Count ? "Open the export" : $"Open the {Fmt.Plural(ready, "file", "files")} downloaded so far")
+            </button>
+        }
+    </div>
+}
+
+@code {
+    private string _path = "";
+    private string? _error;
+    private bool _busy;
+    private CancellationTokenSource? _watch;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Links.DownloadOpened += OnDownloadOpened;
+        Downloads.Changed += OnDownloadsChanged;
+        if (Downloads.Manifest is not null) StartWatching();
+    }
+
+    private async Task PickManifestAsync()
+    {
+        var path = await Picker.PickManifestAsync();
+        if (path is not null) await LoadAsync(path);
+    }
+
+    private async Task OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_path)) await LoadAsync(_path);
+    }
+
+    private async Task LoadAsync(string path)
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            Downloads.Load(path.Trim().Trim('"'));
+            _path = "";
+            await Downloads.CheckAsync();
+            StartWatching();
+        }
+        catch (ManifestException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task PickFolderAsync()
+    {
+        var folder = await Picker.PickAsync();
+        if (folder is null) return;
+        Downloads.SetFolder(folder);
+        await Downloads.CheckAsync();
+    }
+
+    private Task CheckNowAsync() => Downloads.CheckAsync();
+
+    private Task DownloadAllAsync() => Downloads.DownloadAllAsync();
+
+    private void OnDownloadsChanged() => InvokeAsync(StateHasChanged);
+
+    /// <summary>Looks at the folder every few seconds while this screen is open, so finished downloads tick off by themselves.</summary>
+    private void StartWatching()
+    {
+        _watch?.Cancel();
+        _watch = new CancellationTokenSource();
+        var ct = _watch.Token;
+        _ = Task.Run(async () =>
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(3));
+            try
+            {
+                while (await timer.WaitForNextTickAsync(ct))
+                {
+                    if (_busy || Downloads.IsDownloading || Downloads.Manifest is not { } m) continue;
+                    if (Downloads.Found.Count == m.Files.Count && Downloads.Found.All(f => f.State == DownloadedState.Ready)) continue;
+                    var before = Downloads.Found;
+                    await Downloads.CheckAsync(ct);
+                    if (!before.SequenceEqual(Downloads.Found)) await InvokeAsync(StateHasChanged);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }, ct);
+    }
+
+    private void OnDownloadOpened(string fileName) => InvokeAsync(() =>
+    {
+        Downloads.MarkOpened(fileName);
+        StateHasChanged();
+    });
+
+    private async Task OpenAsync()
+    {
+        _busy = true;
+        try
+        {
+            await Session.OpenZipsAsync(Downloads.ReadyFiles());
+            if (Session.IsReady) Nav.NavigateTo(Session.UnzipProblems.Count == 0 ? "overview" : "");
+            else if (Session.Error is { } error) _error = error;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string Describe(string category) => category switch
+    {
+        "light_metadata" => "People and sign-in history",
+        "conversations" => "Conversations",
+        "projects" => "Projects",
+        "memories" => "Memories",
+        "frames" => "Artifacts and pages",
+        _ => category.Replace('_', ' '),
+    };
+
+    private string StateLabel(ManifestFile f, DownloadedState state) => state switch
+    {
+        DownloadedState.Ready => "Downloaded",
+        DownloadedState.InProgress => "Downloading…",
+        DownloadedState.Damaged => "Incomplete or damaged",
+        _ when Downloads.Opened.Contains(f.FileName) => "Waiting for the browser",
+        _ => "Not downloaded yet",
+    };
+
+    private static string StateClass(DownloadedState state) => state switch
+    {
+        DownloadedState.Ready => "good",
+        DownloadedState.Damaged => "medium",
+        _ => "waiting",
+    };
+
+    private static string DownloadLabel(int count, int all) =>
+        count == all ? (all == 1 ? "Download the file" : $"Download all {Fmt.N(all)} files")
+        : count == 1 ? "Download the remaining file"
+        : $"Download the remaining {Fmt.N(count)} files";
+
+    private static string Remaining(TimeSpan left) => left.TotalHours >= 1
+        ? Fmt.Plural((int)left.TotalHours, "hour", "hours")
+        : Fmt.Plural(Math.Max(1, (int)left.TotalMinutes), "minute", "minutes");
+
+    public override void Dispose()
+    {
+        _watch?.Cancel();
+        _watch?.Dispose();
+        Links.DownloadOpened -= OnDownloadOpened;
+        Downloads.Changed -= OnDownloadsChanged;
+        base.Dispose();
+    }
+}

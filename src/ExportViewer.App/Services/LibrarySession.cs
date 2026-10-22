@@ -148,6 +148,9 @@ public sealed class LibrarySession(AppSettings settings, AppLog log) : IDisposab
         }
     }
 
+    /// <summary>The name shown in the top bar for a library, also used for the recent list.</summary>
+    public static string NameFor(RecentLibrary r) => r.Zips is { } zips ? ZipDisplayName(zips) : Path.GetFileName(r.Path.TrimEnd('\\', '/'));
+
     private static string ZipDisplayName(IReadOnlyList<string> zips)
     {
         var folders = zips.Select(z => Path.GetFileName(Path.GetDirectoryName(z) ?? "")).Distinct(StringComparer.OrdinalIgnoreCase).ToList();

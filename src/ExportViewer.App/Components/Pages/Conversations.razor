@@ -21,27 +21,36 @@
     <label>From <input type="date" @bind="_from" @bind:after="Apply" /></label>
     <label>To <input type="date" @bind="_to" @bind:after="Apply" /></label>
     <label>Title contains <input type="text" @bind="_title" @bind:event="oninput" @bind:after="Apply" placeholder="Any" /></label>
-    <label>Completeness
-        <select @bind="_flag" @bind:after="Apply">
-            <option value="0">Any</option>
-            <option value="3">Possibly incomplete</option>
-            <option value="2">Needs a check</option>
-            @if (Expert) { <option value="1">Any note</option> }
-        </select>
-    </label>
-    <label>Sort
-        <select @bind="_sort" @bind:after="Apply">
-            <option value="@ConversationSort.Newest">Newest first</option>
-            <option value="@ConversationSort.Oldest">Oldest first</option>
-            <option value="@ConversationSort.Longest">Longest first</option>
-            <option value="@ConversationSort.Shortest">Shortest first</option>
-            <option value="@ConversationSort.TitleAz">Title A–Z</option>
-        </select>
-    </label>
-    <label class="check"><input type="checkbox" @bind="_files" @bind:after="Apply" /> Has files</label>
-    <label class="check"><input type="checkbox" @bind="_tools" @bind:after="Apply" /> Claude used tools</label>
-    <label class="check"><input type="checkbox" @bind="_edited" @bind:after="Apply" /> Edited or retried</label>
+    <div class="filter-links">
+        <button class="link" @onclick="() => _more = !_more" aria-expanded="@(_more ? "true" : "false")">@(_more ? "Fewer filters" : "More filters")@(HiddenActive > 0 ? $" ({HiddenActive} on)" : "")</button>
+        @if (AnyActive) { <button class="link" @onclick="Clear">Clear filters</button> }
+    </div>
 </div>
+@if (_more)
+{
+    <div class="filters more-filters">
+        <label>Missing replies
+            <select @bind="_flag" @bind:after="Apply">
+                <option value="0">Show all</option>
+                <option value="3">Ends without Claude's reply</option>
+                <option value="2">Has an empty reply</option>
+                @if (Expert) { <option value="1">Any export note</option> }
+            </select>
+        </label>
+        <label>Sort
+            <select @bind="_sort" @bind:after="Apply">
+                <option value="@ConversationSort.Newest">Newest first</option>
+                <option value="@ConversationSort.Oldest">Oldest first</option>
+                <option value="@ConversationSort.Longest">Longest first</option>
+                <option value="@ConversationSort.Shortest">Shortest first</option>
+                <option value="@ConversationSort.TitleAz">Title A–Z</option>
+            </select>
+        </label>
+        <label class="check"><input type="checkbox" @bind="_files" @bind:after="Apply" /> Has attachments or files</label>
+        <label class="check"><input type="checkbox" @bind="_tools" @bind:after="Apply" /> Claude searched the web or used tools</label>
+        <label class="check"><input type="checkbox" @bind="_edited" @bind:after="Apply" /> A message was edited or retried</label>
+    </div>
+}
 
 <ConversationTable Items="_items" Expert="Expert" />
 <Pager Total="_total" Offset="_offset" OffsetChanged="Page" />
@@ -60,17 +69,53 @@
     private ConversationSort _sort;
     private bool _files, _tools, _edited;
     private string? _appliedParams;
+    private bool _more;
+
+    /// <summary>Filters tucked under "More filters" that are switched on.</summary>
+    private int HiddenActive => (_flag != 0 ? 1 : 0) + (_sort != ConversationSort.Newest ? 1 : 0) + (_files ? 1 : 0) + (_tools ? 1 : 0) + (_edited ? 1 : 0);
+
+    private bool AnyActive => HiddenActive > 0 || _user.Length > 0 || _from is not null || _to is not null || _title.Length > 0;
+
+    private void Clear()
+    {
+        _user = _title = "";
+        _from = _to = null;
+        _flag = 0;
+        _sort = ConversationSort.Newest;
+        _files = _tools = _edited = false;
+        Apply();
+    }
+
+    private sealed record Place(string User, DateTime? From, DateTime? To, string Title, int Flag, ConversationSort Sort,
+        bool Files, bool Tools, bool Edited, int Offset, string? AppliedParams);
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        if (Recall<Place>("conversations") is not { } p) return;
+        (_user, _from, _to, _title, _flag, _sort) = (p.User, p.From, p.To, p.Title, p.Flag, p.Sort);
+        (_files, _tools, _edited, _offset, _appliedParams) = (p.Files, p.Tools, p.Edited, p.Offset, p.AppliedParams);
+    }
+
+    protected override void SavePlace() =>
+        Remember("conversations", new Place(_user, _from, _to, _title, _flag, _sort, _files, _tools, _edited, _offset, _appliedParams));
 
     protected override void OnParametersSet()
     {
         var key = $"{UserParam}|{FlagParam}";
         if (key != _appliedParams)
         {
+            // Opened from a link with its own filters (such as a person's "see all conversations").
             _appliedParams = key;
             _user = UserParam ?? "";
             _flag = FlagParam ?? 0;
+            _from = _to = null;
+            _title = "";
+            _files = _tools = _edited = false;
             _offset = 0;
         }
+        // Filters that are on stay visible, so the list is never narrowed by something the reviewer can't see.
+        _more |= HiddenActive > 0;
         base.OnParametersSet();
     }
 
@@ -108,5 +153,10 @@
             Limit: 50,
             Offset: _offset);
         (_total, _items) = Session.Queries.GetConversations(filter);
+        if (ClampOffset(_offset, _total, 50) is var clamped && clamped != _offset)
+        {
+            _offset = clamped;
+            Query();
+        }
     }
 }

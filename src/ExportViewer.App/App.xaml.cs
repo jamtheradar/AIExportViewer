@@ -2,9 +2,17 @@
 
 public partial class App : Application
 {
-    public App()
+    public App(Services.AppSettings settings)
     {
         InitializeComponent();
+        ApplyTheme(settings.Data.Theme);
+    }
+
+    /// <summary>Matches the window frame to the page colours. Light by default whatever the computer is set to.</summary>
+    public static void ApplyTheme(Services.ColourTheme theme)
+    {
+        if (Current is { } app)
+            app.UserAppTheme = theme == Services.ColourTheme.Dark ? AppTheme.Dark : AppTheme.Light;
     }
 
     protected override Window CreateWindow(IActivationState? activationState)

@@ -1,5 +1,6 @@
 @page "/overview"
 @inherits PageBase
+@inject AuditService Audit
 
 <div class="page-head">
     <div>
@@ -11,7 +12,7 @@
                 {
                     <span>Activity from <strong>@Fmt.Day(head.FirstActivity)</strong> to <strong>@Fmt.Day(head.LastActivity)</strong></span>
                 }
-                @if (head.Exports.Count > 0)
+                @if (head.Exports.Count > 1)
                 {
                     <span> · combined from @Fmt.Plural(head.Exports.Count, "export", "exports")</span>
                 }
@@ -22,44 +23,137 @@
 
 @if (!Session.IsReady)
 {
-    <div class="empty">Open an export from the Home page to see the overview.</div>
+    <NoExport What="the overview" />
 }
 else if (_o is { } o)
 {
+    <section class="card attention" aria-labelledby="attention-title">
+        <h2 id="attention-title">Needs your attention</h2>
+        <ul class="checklist">
+            @* Sensitive data *@
+            @if (Audit.Running)
+            {
+                <li class="todo">
+                    <span class="mark" aria-hidden="true"></span>
+                    <div class="what"><strong>Sensitive data: checking now…</strong><span>You can keep using the app while it runs.</span></div>
+                    <a class="act" href="sensitive">See progress</a>
+                </li>
+            }
+            else if (_scan is not { HasRun: true })
+            {
+                <li class="todo">
+                    <span class="mark" aria-hidden="true"></span>
+                    <div class="what"><strong>Sensitive data: not checked yet</strong><span>Looks for things like tax file numbers, card numbers and passwords that people typed or pasted into Claude. Runs on this computer.</span></div>
+                    <button class="primary act" @onclick="Audit.RunAsync">Check now</button>
+                </li>
+            }
+            else if (_sensitive > 0)
+            {
+                <li class="warn">
+                    <span class="mark" aria-hidden="true"></span>
+                    <div class="what">
+                        <strong>Sensitive data: @Fmt.Plural(_sensitive, "possible item", "possible items") to review</strong>
+                        <span>Includes: @string.Join(", ", _sensitiveTypes)@(Stale ? ". The export has changed since the check, so check again." : ".")</span>
+                    </div>
+                    <a class="act" href="sensitive">Review</a>
+                </li>
+            }
+            else
+            {
+                <li class="ok">
+                    <span class="mark" aria-hidden="true"></span>
+                    <div class="what"><strong>Sensitive data: nothing found</strong><span>Last checked @Fmt.Date(_scan.At!.Value.UtcDateTime.ToString("O"), ViewMode.Basic)@(Stale ? ". The export has changed since then, so check again." : ".")</span></div>
+                    <a class="act" href="sensitive">Details</a>
+                </li>
+            }
+
+            @* Watchlists *@
+            @if (Audit.Watchlists.Count == 0)
+            {
+                <li class="todo">
+                    <span class="mark" aria-hidden="true"></span>
+                    <div class="what"><strong>Watchlists: none set up</strong><span>Watch for names, clients or words that matter to you. Matches show up after a check.</span></div>
+                    <a class="act" href="watchlists">Set up</a>
+                </li>
+            }
+            else if (_scan is { HasRun: true } && !Audit.Running)
+            {
+                <li class="@(_watch > 0 ? "warn" : "ok")">
+                    <span class="mark" aria-hidden="true"></span>
+                    <div class="what">
+                        <strong>Watchlists: @(_watch > 0 ? Fmt.Plural(_watch, "match", "matches") : "no matches")</strong>
+                        <span>@Fmt.Plural(Audit.Watchlists.Count, "list", "lists") checked@(_scan.WatchlistFingerprint != Audit.WatchlistFingerprint ? ". The lists have changed since the check, so check again." : ".")</span>
+                    </div>
+                    <a class="act" href="watchlists">@(_watch > 0 ? "Review" : "Details")</a>
+                </li>
+            }
+
+            @* Conversations Anthropic didn't export in full *@
+            @{ var incomplete = o.FlaggedHigh + o.FlaggedMedium; }
+            @if (incomplete > 0)
+            {
+                <li class="info">
+                    <span class="mark" aria-hidden="true"></span>
+                    <div class="what">
+                        <strong>@Fmt.Plural(incomplete, "conversation may be", "conversations may be") incomplete</strong>
+                        <span>Some replies from Claude are missing or empty. This is about what Anthropic included in the export, not something the person did.</span>
+                    </div>
+                    <a class="act" href="@($"conversations?flag={(o.FlaggedHigh > 0 ? 3 : 2)}")">Show</a>
+                </li>
+            }
+            @if (Expert && o.FlaggedLow > 0)
+            {
+                <li class="info">
+                    <span class="mark" aria-hidden="true"></span>
+                    <div class="what"><strong>@Fmt.Plural(o.FlaggedLow, "conversation was", "conversations were") changed well after the last message</strong><span>Often just a rename.</span></div>
+                    <a class="act" href="conversations?flag=1">Show</a>
+                </li>
+            }
+
+            @* Files the app couldn't read. "Files loaded" is in the Expert menu, so Basic reaches it from here. *@
+            @if (_loadIssues > 0)
+            {
+                <li class="warn">
+                    <span class="mark" aria-hidden="true"></span>
+                    <div class="what"><strong>@Fmt.Plural(_loadIssues, "file or record", "files or records") could not be read</strong><span>Everything else was opened. What's missing may matter for your review.</span></div>
+                    <a class="act" href="library">See which</a>
+                </li>
+            }
+
+            @* The reviewer's own flags *@
+            @if (_flags > 0)
+            {
+                <li class="flagged">
+                    <span class="mark" aria-hidden="true"></span>
+                    <div class="what"><strong>You've flagged @Fmt.Plural(_flags, "item", "items")</strong><span>Your flags and notes, kept on this computer.</span></div>
+                    <a class="act" href="flags">Open</a>
+                </li>
+            }
+        </ul>
+    </section>
+
+    <div class="section-head"><h2>Activity</h2></div>
     <div class="tiles">
         <a class="tile" href="users"><div class="value">@Fmt.N(o.Users)</div><div class="label">People</div></a>
         <a class="tile" href="conversations"><div class="value">@Fmt.N(o.Conversations)</div><div class="label">Conversations</div></a>
-        <div class="tile"><div class="value">@Fmt.N(o.Messages)</div><div class="label">Messages</div></div>
+        <a class="tile" href="conversations"><div class="value">@Fmt.N(o.Messages)</div><div class="label">Messages</div></a>
         <a class="tile" href="projects"><div class="value">@Fmt.N(o.Projects)</div><div class="label">Projects</div></a>
         <a class="tile" href="memories"><div class="value">@Fmt.N(o.Memories)</div><div class="label">People with memory</div></a>
-        <a class="tile" href="artifacts"><div class="value">@Fmt.N(o.Artifacts)</div><div class="label">Artifacts &amp; pages</div></a>
+        <a class="tile" href="artifacts"><div class="value">@Fmt.N(o.Artifacts)</div><div class="label">Documents &amp; pages</div></a>
         @if (Expert)
         {
             <a class="tile" href="other"><div class="value">@Fmt.N(o.GenericRecords)</div><div class="label">Other records</div></a>
         }
     </div>
 
-    @if (o.FlaggedHigh + o.FlaggedMedium + (Expert ? o.FlaggedLow : 0) > 0)
-    {
-        <div class="banner @(o.FlaggedHigh > 0 ? "high" : "medium")">
-            <strong>Some conversations may be incomplete in this export.</strong>
-            <ul>
-                @if (o.FlaggedHigh > 0) { <li><a href="conversations?flag=3">@Fmt.Plural(o.FlaggedHigh, "conversation ends", "conversations end")</a> without a full reply from Claude.</li> }
-                @if (o.FlaggedMedium > 0) { <li><a href="conversations?flag=2">@Fmt.Plural(o.FlaggedMedium, "conversation has", "conversations have")</a> an empty reply part-way through.</li> }
-                @if (Expert && o.FlaggedLow > 0) { <li><a href="conversations?flag=1">@Fmt.Plural(o.FlaggedLow, "conversation was", "conversations were")</a> changed well after the last message (often just a rename).</li> }
-            </ul>
-            <p class="small muted">This is about what Anthropic included in the export, not something the person did.</p>
-        </div>
-    }
-
     <div class="grid-2">
         <div class="card">
-            <h2 style="margin-top:0">Messages sent by people</h2>
+            <h2>Messages sent by people</h2>
             <ActivityChart Points="_points" By="_grain" AriaLabel="Messages sent by people over time" />
         </div>
         <div class="card">
-            <h2 style="margin-top:0">Most active people</h2>
-            <p class="small muted">Messages sent to Claude in this export</p>
+            <h2>Most active people</h2>
+            <p class="small subtle">Messages sent to Claude in this export</p>
             @if (_top.Count == 0)
             {
                 <div class="empty">No messages yet.</div>
@@ -103,6 +197,17 @@ else if (_o is { } o)
     private IReadOnlyList<ActivityChart.Point> _points = [];
     private ActivityChart.Grain _grain;
     private List<(string Uuid, string Name, int Count)> _top = [];
+    private ScanInfo? _scan;
+    private int _sensitive, _watch, _flags, _loadIssues;
+    private List<string> _sensitiveTypes = [];
+
+    private bool Stale => _scan is { LibraryChanged: true } or { RulesChanged: true };
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Audit.Changed += OnAuditChanged;
+    }
 
     protected override void LoadData()
     {
@@ -114,8 +219,33 @@ else if (_o is { } o)
         _top = activity.GroupBy(a => a.AccountUuid)
             .Select(g => (g.Key, names.GetValueOrDefault(g.Key) ?? "Unknown person", g.Count()))
             .OrderByDescending(t => t.Item3).Take(10).ToList();
+        _loadIssues = q.GetLoadIssues().Count;
+        LoadAttention();
     }
+
+    private void LoadAttention()
+    {
+        _scan = Session.Audit.GetScanInfo();
+        // Same default as the Sensitive data screen: likely and possible matches, not unsure ones.
+        var sensitive = Session.Audit.GetCounts(FindingSource.Sensitive, Confidence.Medium);
+        _sensitive = sensitive.Sum(c => c.Count);
+        _sensitiveTypes = sensitive.Take(3).Select(c => AuditLabels.Type(c.Type)).ToList();
+        _watch = Session.Audit.GetCounts(FindingSource.Watchlist).Sum(c => c.Count);
+        _flags = Session.Reviews.Count();
+    }
+
+    private void OnAuditChanged() => InvokeAsync(() =>
+    {
+        if (Session.IsReady && !Audit.Running) LoadAttention();
+        StateHasChanged();
+    });
 
     private static string Pct(int v, int max) =>
         (100.0 * v / Math.Max(1, max)).ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+
+    public override void Dispose()
+    {
+        Audit.Changed -= OnAuditChanged;
+        base.Dispose();
+    }
 }

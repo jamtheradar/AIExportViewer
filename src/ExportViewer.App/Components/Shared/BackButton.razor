@@ -1,0 +1,14 @@
+@* Goes back to wherever the reviewer came from (a list stays on the same page), or to Fallback if there's nowhere to go back to. *@
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<button class="back-link" @onclick="GoBackAsync"><span aria-hidden="true">‹</span> Back</button>
+
+@code {
+    [Parameter, EditorRequired] public string Fallback { get; set; } = "";
+
+    private async Task GoBackAsync()
+    {
+        if (!await JS.InvokeAsync<bool>("aiev.back")) Nav.NavigateTo(Fallback);
+    }
+}

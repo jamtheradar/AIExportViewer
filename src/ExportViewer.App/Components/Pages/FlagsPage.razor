@@ -102,6 +102,16 @@ else
     private string _user = "", _what = "", _text = "";
     private bool _confirmClear;
 
+    private sealed record Place(string User, string What, string Text);
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        if (Recall<Place>("flags") is { } p) (_user, _what, _text) = (p.User, p.What, p.Text);
+    }
+
+    protected override void SavePlace() => Remember("flags", new Place(_user, _what, _text));
+
     protected override void LoadData()
     {
         _all = FlagList.Build(Session.Reviews.All(), Session.Queries);

@@ -6,12 +6,25 @@
     var host = Uri.TryCreate(url, UriKind.Absolute, out var u) ? u.Host : "";
     <div class="overlay" role="dialog" aria-modal="true" aria-labelledby="link-title" @onkeydown="OnKey">
         <div class="dialog">
-            <h2 id="link-title">Open this link in your web browser?</h2>
-            <p>This link comes from the export, so treat it with care. It will open in your normal browser, outside this app@(host.Length > 0 ? $", and go to {host}" : "").</p>
+            @if (Links.PendingDownload is { } file)
+            {
+                <h2 id="link-title">Download @file in your web browser?</h2>
+                <p>Your normal web browser will download this file from @host, outside this app.</p>
+                <ul class="small" style="margin:.2rem 0 .6rem;padding-left:1.2rem">
+                    <li>The link may only work once, so let the download finish.</li>
+                    <li>If the browser asks you to sign in, use the Claude account that requested the export.</li>
+                    <li>Save the file in the folder this screen is watching (usually your Downloads folder).</li>
+                </ul>
+            }
+            else
+            {
+                <h2 id="link-title">Open this link in your web browser?</h2>
+                <p>This link comes from the export, so treat it with care. It will open in your normal browser, outside this app@(host.Length > 0 ? $", and go to {host}" : "").</p>
+            }
             <div class="url">@url</div>
             <div class="actions">
                 <button @onclick="Links.Dismiss">Cancel</button>
-                <button class="primary" @onclick="Links.ConfirmAsync">Open in browser</button>
+                <button class="primary" @onclick="Links.ConfirmAsync">@(Links.PendingDownload is null ? "Open in browser" : "Download in browser")</button>
             </div>
         </div>
     </div>

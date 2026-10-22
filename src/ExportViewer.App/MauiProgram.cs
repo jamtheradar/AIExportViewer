@@ -28,6 +28,8 @@ public static class MauiProgram
         builder.Services.AddSingleton<FolderPicker>();
         builder.Services.AddSingleton<FileSaver>();
         builder.Services.AddSingleton<ExternalLinks>();
+        builder.Services.AddSingleton<ManifestDownloads>();
+        builder.Services.AddSingleton<PageMemory>();
 
         return builder.Build();
     }

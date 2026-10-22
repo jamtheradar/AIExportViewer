@@ -3,16 +3,23 @@
 
 @if (_u is null)
 {
-    <div class="empty">@(Session.IsReady ? "This person is not in the export." : "Open an export first.")</div>
+    if (Session.IsReady)
+    {
+        <div class="empty">This person is not in the export.</div>
+    }
+    else
+    {
+        <NoExport What="this person" />
+    }
     return;
 }
 
+<BackButton Fallback="users" />
 <div class="page-head">
     <div>
         <h1>@_u.DisplayName</h1>
         <p class="subtle">@_u.Email @if (!_u.InUserList) { <span class="tag">Not in the export's user list</span> }</p>
     </div>
-    <button @onclick='() => Nav.NavigateTo("users")'>Back to users</button>
 </div>
 
 <div class="tiles">
@@ -39,7 +46,7 @@
         break;
     case 1:
         <div class="card">
-            <h2 style="margin-top:0">Messages sent</h2>
+            <h2>Messages sent</h2>
             <ActivityChart Points="_points" By="_grain" AriaLabel="Messages sent by this person over time" />
         </div>
         break;
@@ -102,13 +109,24 @@
     private List<ProjectSummary> _projects = [];
     private List<ArtifactSummary> _artifacts = [];
     private bool _hasMemory;
+    private string? _placeKey;
+
+    private sealed record Place(int Offset, int Tab);
 
     protected override void LoadData()
     {
         var q = Session.Queries;
         _u = q.GetUser(Id);
         if (_u is null) return;
-        _offset = 0;
+        if (_placeKey != Key)
+        {
+            // A different person: keep the last one's place and pick up this one's.
+            SavePlace();
+            _placeKey = Key;
+            var place = Recall<Place>(Key);
+            _offset = place?.Offset ?? 0;
+            _tab = place?.Tab ?? 0;
+        }
         LoadConvs();
         _logins = q.GetLogins(Id);
         (_points, _grain) = ActivityChart.Bucket(q.GetActivity().Where(a => a.AccountUuid == Id).Select(a => Fmt.Parse(a.CreatedAt)).OfType<DateTimeOffset>());
@@ -117,7 +135,22 @@
         _hasMemory = q.GetMemoryPeople().Any(m => m.AccountUuid == Id);
     }
 
-    private void LoadConvs() => (_convTotal, _convs) = Session.Queries.GetConversations(new ConversationFilter(AccountUuid: Id, Limit: 50, Offset: _offset));
+    private string Key => "users/" + Id;
+
+    protected override void SavePlace()
+    {
+        if (_placeKey is not null) Remember(_placeKey, new Place(_offset, _tab));
+    }
+
+    private void LoadConvs()
+    {
+        (_convTotal, _convs) = Session.Queries.GetConversations(new ConversationFilter(AccountUuid: Id, Limit: 50, Offset: _offset));
+        if (ClampOffset(_offset, _convTotal, 50) is var clamped && clamped != _offset)
+        {
+            _offset = clamped;
+            LoadConvs();
+        }
+    }
 
     private void PageConvs(int offset)
     {

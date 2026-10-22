@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ExportViewer.Core\ExportViewer.Core.csproj" />
+    <ProjectReference Include="..\..\src\ExportViewer.Download\ExportViewer.Download.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -100,13 +100,30 @@
     private SearchResults? _results;
     private List<SearchHit> _hits = [];
     private string? _appliedQuery;
+    private int _restoreShown;
+
+    private sealed record Place(string Q, string User, DateTime? From, DateTime? To, SearchSort Sort, string[] Kinds, int Shown, string? AppliedQuery);
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        if (Recall<Place>("search") is not { } p) return;
+        (_q, _user, _from, _to, _sort, _appliedQuery, _restoreShown) = (p.Q, p.User, p.From, p.To, p.Sort, p.AppliedQuery, p.Shown);
+        _kinds.Clear();
+        _kinds.UnionWith(p.Kinds);
+    }
+
+    protected override void SavePlace() =>
+        Remember("search", new Place(_q, _user, _from, _to, _sort, _kinds.ToArray(), _hits.Count, _appliedQuery));
 
     protected override void OnParametersSet()
     {
         if (QueryParam != _appliedQuery)
         {
+            // A new search from the box at the top starts afresh.
             _appliedQuery = QueryParam;
             _q = QueryParam ?? "";
+            _restoreShown = 0;
             _results = null;
         }
         base.OnParametersSet();
@@ -116,6 +133,14 @@
     {
         _users = Session.Queries.GetUsers();
         if (_q.Length > 0) Run();
+        // Coming back: show as many results as were shown before ("Show more results").
+        while (_restoreShown > _hits.Count && _results is { } r && _hits.Count < r.Total)
+        {
+            var before = _hits.Count;
+            More();
+            if (_hits.Count == before) break;
+        }
+        _restoreShown = 0;
     }
 
     private void OnKey(KeyboardEventArgs e)

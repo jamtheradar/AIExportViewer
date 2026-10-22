@@ -3,10 +3,18 @@
 
 @if (_p is null)
 {
-    <div class="empty">@(Session.IsReady ? "This project is not in the export." : "Open an export first.")</div>
+    if (Session.IsReady)
+    {
+        <div class="empty">This project is not in the export.</div>
+    }
+    else
+    {
+        <NoExport What="this project" />
+    }
     return;
 }
 
+<BackButton Fallback="projects" />
 <div class="page-head">
     <div>
         <h1>@(string.IsNullOrWhiteSpace(_p.Summary.Name) ? "(unnamed project)" : _p.Summary.Name)</h1>
@@ -16,16 +24,15 @@
             · @(_p.Summary.IsPrivate ? "Private" : "Shared with the organisation")
         </p>
     </div>
-    <button @onclick='() => Nav.NavigateTo("projects")'>Back to projects</button>
 </div>
 
 @if (!string.IsNullOrWhiteSpace(_p.Summary.Description))
 {
-    <div class="card"><h2 style="margin-top:0">Description</h2><SafeHtml Text="@_p.Summary.Description" Plain="true" /></div>
+    <div class="card"><h2>Description</h2><SafeHtml Text="@_p.Summary.Description" Plain="true" /></div>
 }
 @if (!string.IsNullOrWhiteSpace(_p.PromptTemplate))
 {
-    <div class="card"><h2 style="margin-top:0">Instructions for Claude</h2><SafeHtml Text="@_p.PromptTemplate" Plain="true" /></div>
+    <div class="card"><h2>Instructions for Claude</h2><SafeHtml Text="@_p.PromptTemplate" Plain="true" /></div>
 }
 
 <h2>Knowledge documents (@_p.Docs.Count)</h2>

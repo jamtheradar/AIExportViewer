@@ -4,16 +4,17 @@
 @inject AppLog Log
 @inject ViewModeService View
 @inject LibrarySession Session
+@inject IJSRuntime JS
 
 <div class="page-head">
     <div>
         <h1>Settings</h1>
-        <p class="subtle">This app works entirely offline. It never connects to the internet, and it never changes your export files.</p>
+        <p class="subtle">This app works offline. It only connects to the internet when you ask it to download an export from claude.ai, and it never changes your export files.</p>
     </div>
 </div>
 
 <div class="card">
-    <h2 style="margin-top:0">View</h2>
+    <h2>View</h2>
     <p>Choose how much detail to show when the app starts. You can switch at any time with the Basic / Expert buttons at the top.</p>
     <div class="segmented" role="group" aria-label="Default view">
         <button class="@(Settings.Data.DefaultViewMode == ViewMode.Basic ? "on" : "")" @onclick="() => SetDefault(ViewMode.Basic)">Basic</button>
@@ -23,9 +24,18 @@
 </div>
 
 <div class="card">
-    <h2 style="margin-top:0">Data stored on this computer</h2>
+    <h2>Colours</h2>
+    <p>Light is easiest to read for most people. Dark uses light text on a dark background.</p>
+    <div class="segmented" role="group" aria-label="Colours">
+        <button class="@(Settings.Data.Theme == ColourTheme.Light ? "on" : "")" @onclick="() => SetTheme(ColourTheme.Light)">Light</button>
+        <button class="@(Settings.Data.Theme == ColourTheme.Dark ? "on" : "")" @onclick="() => SetTheme(ColourTheme.Dark)">Dark</button>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Data stored on this computer</h2>
     <p>To open large exports quickly, the app keeps a searchable copy of each export it has opened. It stays on this computer only, in this folder:</p>
-    <p class="mono small">@Settings.DataFolder</p>
+    <p class="path">@Settings.DataFolder</p>
     <p>Total: <strong>@Fmt.Bytes(_total)</strong></p>
 
     @if (_dbs.Count > 0)
@@ -37,7 +47,7 @@
                     @foreach (var d in _dbs)
                     {
                         <tr>
-                            <td class="mono small">@(d.LibraryRoot ?? Path.GetFileName(d.FilePath))</td>
+                            <td class="path">@(d.LibraryRoot ?? Path.GetFileName(d.FilePath))</td>
                             <td class="num">@Fmt.Bytes(d.Bytes)</td>
                             <td class="nowrap">@d.LastWrite.ToString("d MMM yyyy, h:mm tt")</td>
                             <td class="num"><button class="danger" @onclick="() => _confirmDb = d">Delete</button></td>
@@ -63,7 +73,7 @@
                     @foreach (var r in _reviews)
                     {
                         <tr>
-                            <td class="mono small">@(r.LibraryRoot ?? Path.GetFileName(r.FilePath))</td>
+                            <td class="path">@(r.LibraryRoot ?? Path.GetFileName(r.FilePath))</td>
                             <td class="num">@Fmt.Bytes(r.Bytes)</td>
                             <td class="nowrap">@r.LastWrite.ToString("d MMM yyyy, h:mm tt")</td>
                             <td class="num"><button class="danger" @onclick="() => _confirmReview = r">Delete</button></td>
@@ -92,25 +102,25 @@
 </div>
 
 <div class="card">
-    <h2 style="margin-top:0">Recently opened folders</h2>
+    <h2>Recently opened folders</h2>
     <p>@Fmt.Plural(Settings.Data.Recent.Count, "folder location is", "folder locations are") remembered. Only the locations are stored, not any content.</p>
     <button @onclick="ClearRecent" disabled="@(Settings.Data.Recent.Count == 0)">Clear the list</button>
 </div>
 
 <div class="card">
-    <h2 style="margin-top:0">Troubleshooting log</h2>
+    <h2>Troubleshooting log</h2>
     <label style="display:flex;gap:.5rem;align-items:flex-start">
         <input type="checkbox" checked="@Settings.Data.LoggingEnabled" @onchange="e => Settings.Update(d => d.LoggingEnabled = (bool)e.Value!)" />
         <span>Keep a troubleshooting log. <span class="muted small">Off unless you turn it on. It records only file counts and timings, never what people wrote.</span></span>
     </label>
     @if (File.Exists(Log.LogFile))
     {
-        <p class="small"><span class="mono">@Log.LogFile</span> (@Fmt.Bytes(new FileInfo(Log.LogFile).Length)) <button class="link" @onclick="DeleteLog">Delete log</button></p>
+        <p class="small"><span class="path">@Log.LogFile</span> (@Fmt.Bytes(new FileInfo(Log.LogFile).Length)) <button class="link" @onclick="DeleteLog">Delete log</button></p>
     }
 </div>
 
 <div class="card">
-    <h2 style="margin-top:0">About</h2>
+    <h2>About</h2>
     <dl class="props">
         <dt>Version</dt><dd>@AppInfo.Current.VersionString</dd>
         <dt>Internet access</dt><dd>None. The app makes no network connections, has no updates, telemetry or crash reporting.</dd>
@@ -123,7 +133,7 @@
     <div class="overlay" role="dialog" aria-modal="true">
         <div class="dialog">
             <h2>Delete this saved copy?</h2>
-            <p class="mono small">@(db.LibraryRoot ?? db.FilePath)</p>
+            <p class="path">@(db.LibraryRoot ?? db.FilePath)</p>
             <p>The export folder itself is not touched. Opening it again will read it from scratch.</p>
             <div class="actions">
                 <button @onclick="() => _confirmDb = null">Cancel</button>
@@ -138,7 +148,7 @@
     <div class="overlay" role="dialog" aria-modal="true">
         <div class="dialog">
             <h2>Delete these flags and notes?</h2>
-            <p class="mono small">@(review.LibraryRoot ?? review.FilePath)</p>
+            <p class="path">@(review.LibraryRoot ?? review.FilePath)</p>
             <p>Every flag and note you made for this export is removed from this computer. This can't be undone.</p>
             <div class="actions">
                 <button @onclick="() => _confirmReview = null">Cancel</button>
@@ -190,6 +200,13 @@
     {
         Settings.Update(d => d.DefaultViewMode = mode);
         View.Set(mode);
+    }
+
+    private async Task SetTheme(ColourTheme theme)
+    {
+        Settings.Update(d => d.Theme = theme);
+        await JS.InvokeVoidAsync("aiev.setTheme", theme == ColourTheme.Dark ? "dark" : "light");
+        global::ExportViewer.App.App.ApplyTheme(theme);
     }
 
     private void DeleteDb(LocalDatabase db)

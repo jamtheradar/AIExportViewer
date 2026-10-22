@@ -66,7 +66,7 @@
                         <span class="tag">@item.Type</span>
                         @if (item.Title is not null) { <strong> @item.Title</strong> }
                         @if (item.Url is not null) { <span> — <ExtLink Url="@item.Url" /></span> }
-                        @if (item.FileName is not null) { <span class="mono small"> @item.FileName</span> <span class="muted small">(file not included in export)</span> }
+                        @if (item.FileName is not null) { <span class="path"> @item.FileName</span> <span class="muted small">(file not included in export)</span> }
                         @if (!string.IsNullOrEmpty(item.Text)) { <SafeHtml Text="@item.Text" Plain="true" MaxChars="20000" /> }
                         <details><summary class="small">All fields</summary><AllFields Raw="@item.Raw" /></details>
                     </div>

@@ -10,9 +10,10 @@ public static class Fmt
     public static DateTimeOffset? Parse(string? utc) =>
         DateTimeOffset.TryParse(utc, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var d) ? d : null;
 
-    public static string Date(string? utc, ViewMode mode)
+    public static string Date(string? utc, ViewMode mode) => Parse(utc) is { } d ? Date(d, mode) : "—";
+
+    public static string Date(DateTimeOffset d, ViewMode mode)
     {
-        if (Parse(utc) is not { } d) return "—";
         var local = d.ToLocalTime();
         return mode == ViewMode.Expert
             ? $"{local:yyyy-MM-dd HH:mm:ss} (UTC {d.UtcDateTime:yyyy-MM-dd HH:mm:ss})"

@@ -4,10 +4,18 @@
 
 @if (_d is null)
 {
-    <div class="empty">@(Session.IsReady ? "This conversation is not in the export." : "Open an export first.")</div>
+    if (Session.IsReady)
+    {
+        <div class="empty">This conversation is not in the export.</div>
+    }
+    else
+    {
+        <NoExport What="this conversation" />
+    }
     return;
 }
 
+<BackButton Fallback="conversations" />
 <div class="page-head">
     <div>
         <h1>@_d.Header.Title</h1>
@@ -21,7 +29,6 @@
     <div class="head-actions">
         <FlagButton ConversationUuid="@Id" Flag="@_flags.GetValueOrDefault("")" OnChanged="LoadFlags" />
         <ExportButtons Build="BuildReport" Kind="conversation" OfferFullValues="true" />
-        <button @onclick='() => Nav.NavigateTo("conversations")'>Back to list</button>
     </div>
 </div>
 

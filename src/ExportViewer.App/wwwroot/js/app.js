@@ -35,6 +35,12 @@ window.aiev = (function () {
     }
 
     return {
+        /** Goes back like the browser's Back button. False when there is nowhere to go back to. */
+        back: function () {
+            if (window.history.length <= 1) return false;
+            window.history.back();
+            return true;
+        },
         init: function (linkRef, shellRef) {
             links = linkRef;
             shell = shellRef;
@@ -50,6 +56,9 @@ window.aiev = (function () {
                 el.classList.add('flash');
                 setTimeout(function () { el.classList.remove('flash'); }, 2000);
             }
+        },
+        setTheme: function (theme) {
+            document.documentElement.setAttribute('data-theme', theme === 'dark' ? 'dark' : 'light');
         },
         scrollTop: function () {
             const main = document.querySelector('.main-scroll');
