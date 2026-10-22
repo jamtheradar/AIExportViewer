@@ -86,7 +86,7 @@ xcrun stapler staple <pkg>
 
 Entitlements: `com.apple.security.app-sandbox` = true, `com.apple.security.files.user-selected.read-write` = true (saving downloads and reports), `com.apple.security.network.client` = true (used only by `ExportViewer.Download`).
 
-> Verified on Windows (2026-10-22): `dotnet build`, `dotnet build -c Release`, all `dotnet test` commands. Not yet verified: the `dotnet publish` commands and everything on macOS.
+> Verified on Windows (2026-10-22): `dotnet build`, `dotnet build -c Release`, all `dotnet test` commands. The release workflow (publish, `vpk pack`, `vpk upload github`) produced v0.1.0 on 2026-10-22. Not yet verified: installing from Setup.exe, updating an installed copy (needs the repo public and a second release), the MSIX publish and everything on macOS.
 
 ### Local data location
 
