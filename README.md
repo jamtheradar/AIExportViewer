@@ -1,4 +1,8 @@
+<img src="src/ExportViewer.App/Resources/AppIcon/appicon.svg" alt="" width="96" height="96" align="right" />
+
 # AI Export Viewer
+
+**New here? Read the [how-to guide](docs/HOWTO.md).**
 
 A desktop app for reviewing a Claude Team or Enterprise organisation data export, offline. It is made for managers who
 need to look through staff usage without technical tools: people, conversations, projects, memories and artifacts,

@@ -29,8 +29,9 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#2F4858" />
-        <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#2F4858" BaseSize="128,128" />
+        <!-- The whole logo is one drawing (no separate foreground), so every platform shows it the same way. -->
+        <MauiIcon Include="Resources\AppIcon\appicon.svg" />
+        <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#1c5cab" BaseSize="128,128" />
         <MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
     </ItemGroup>
 

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- AI Export Viewer logo: a conversation under a magnifying glass. Copies: wwwroot/logo.svg, Resources/Splash/splash.svg (mark only). -->
+  <rect x="24" y="24" width="464" height="464" rx="104" fill="#1c5cab"/>
+  <g transform="translate(-8 -11)">
+    <path d="M136 120h208a40 40 0 0 1 40 40v120a40 40 0 0 1-40 40H212l-60 52v-52h-16a40 40 0 0 1-40-40V160a40 40 0 0 1 40-40z" fill="#ffffff"/>
+    <g fill="#1c5cab">
+      <rect x="140" y="172" width="200" height="22" rx="11"/>
+      <rect x="140" y="214" width="150" height="22" rx="11"/>
+      <rect x="140" y="256" width="110" height="22" rx="11"/>
+    </g>
+    <circle cx="328" cy="312" r="70" fill="#1c5cab" stroke="#ffffff" stroke-width="28"/>
+    <path d="M380 364l50 50" stroke="#ffffff" stroke-width="40" stroke-linecap="round"/>
+  </g>
+</svg>

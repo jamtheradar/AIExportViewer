@@ -163,6 +163,8 @@ mark { background: var(--mark); color: inherit; padding: 0 1px; border-radius: 2
     overflow-y: auto;
 }
 .nav .brand { color: var(--text); font-family: var(--font-display); font-weight: 600; font-size: var(--fs-h3); padding: .2rem .6rem 1rem; }
+.nav .brand .name { display: flex; gap: .5rem; align-items: center; }
+.nav .brand .name img { flex: none; }
 .nav .brand small { display: block; font-weight: 400; color: var(--nav-muted); font-size: var(--fs-caption); }
 .nav a {
     color: var(--nav-text);

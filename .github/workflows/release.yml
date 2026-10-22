@@ -59,7 +59,8 @@ jobs:
           # PrivacyGuardTests.Windows_entry_point_runs_the_installer_start_up_work_first checks the call instead.
           # MAUI turns the SVG app icon into an .ico during the build; the installer uses the same one.
           $icon = Get-ChildItem src/ExportViewer.App/obj -Recurse -Filter appicon.ico -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($icon) { $pack += @('--icon', $icon.FullName) }
+          if ($icon) { Write-Host "Installer icon: $($icon.FullName)"; $pack += @('--icon', $icon.FullName) }
+          else { Write-Host "::warning::No appicon.ico found, so the installer uses Velopack's default icon." }
           dotnet vpk @pack
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
