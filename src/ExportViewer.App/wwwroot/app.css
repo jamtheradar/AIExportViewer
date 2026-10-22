@@ -209,6 +209,15 @@ mark { background: var(--mark); color: inherit; padding: 0 1px; border-radius: 2
 .offline::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--status-good); }
 .offline.online { border-color: var(--accent); color: var(--text); }
 .offline.online::before { background: var(--accent); }
+.update-ready {
+    font-size: var(--fs-caption);
+    padding: .15rem .65rem;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--accent-text);
+    white-space: nowrap;
+}
+.update-ready:hover { background: var(--accent-hover); text-decoration: none; }
 
 .segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .segmented button { border: 0; border-radius: 0; background: var(--surface); color: var(--text-2); padding: .25rem .7rem; }

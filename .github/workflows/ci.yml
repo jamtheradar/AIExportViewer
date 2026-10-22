@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Install the MAUI workload
+        run: dotnet workload install maui-windows
+
+      # Build everything first so PrivacyGuardTests also checks the app assembly.
+      - name: Build
+        run: dotnet build -c Release
+
+      - name: Test
+        run: dotnet test tests/ExportViewer.Core.Tests -c Release --no-build --filter "Category!=Performance"

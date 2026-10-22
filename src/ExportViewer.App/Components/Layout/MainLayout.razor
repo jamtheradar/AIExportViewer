@@ -4,6 +4,7 @@
 @inject ViewModeService View
 @inject ExternalLinks Links
 @inject ManifestDownloads Downloads
+@inject AppUpdates Updates
 @inject FolderPicker Picker
 @inject IJSRuntime JS
 @inject AppSettings Settings
@@ -37,9 +38,17 @@
             {
                 <span class="offline online" title="Downloading export files from claude.ai because you asked. The app goes back offline when it finishes.">Downloading from claude.ai</span>
             }
+            else if (Updates.IsOnline)
+            {
+                <span class="offline online" title="Getting a newer version of this app from GitHub. Nothing about you or your exports is sent.">@(Updates.Status == UpdateStatus.Downloading ? "Downloading update" : "Checking for updates")</span>
+            }
             else
             {
-                <span class="offline" title="The app only connects to the internet when you ask it to download an export from claude.ai. Everything else stays on this computer.">Offline</span>
+                <span class="offline" title="The app only connects to the internet to download an export from claude.ai when you ask, and to check GitHub for a newer version of the app (you can turn this off in Settings). Your exports stay on this computer.">Offline</span>
+            }
+            @if (Updates.Status == UpdateStatus.Ready)
+            {
+                <a class="update-ready" href="settings" title="Version @Updates.NewVersion is ready. Open Settings to restart and install it.">Update ready</a>
             }
         </header>
         <div class="main-scroll">
@@ -63,6 +72,7 @@
         Session.Changed += OnChanged;
         View.Changed += OnChanged;
         Downloads.Changed += OnChanged;
+        Updates.Changed += OnChanged;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -73,6 +83,7 @@
         await JS.InvokeVoidAsync("aiev.init", _linksRef, _selfRef);
         if (Settings.Data.Theme == ColourTheme.Dark)
             await JS.InvokeVoidAsync("aiev.setTheme", "dark");
+        _ = Updates.StartAsync();
     }
 
     private void OnSearchKey(KeyboardEventArgs e)
@@ -97,6 +108,7 @@
         Session.Changed -= OnChanged;
         View.Changed -= OnChanged;
         Downloads.Changed -= OnChanged;
+        Updates.Changed -= OnChanged;
         _linksRef?.Dispose();
         _selfRef?.Dispose();
     }

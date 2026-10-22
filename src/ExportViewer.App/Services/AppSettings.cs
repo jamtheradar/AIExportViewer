@@ -18,6 +18,10 @@ public sealed class SettingsData
     public ColourTheme Theme { get; set; } = ColourTheme.Light;
     public bool MemoryOnly { get; set; }
     public bool LoggingEnabled { get; set; }
+
+    /// <summary>Look for a newer version on GitHub when the installed app starts. On unless the user turns it off.</summary>
+    public bool CheckForUpdates { get; set; } = true;
+
     public List<RecentLibrary> Recent { get; set; } = [];
     public List<Watchlist> Watchlists { get; set; } = [];
 }

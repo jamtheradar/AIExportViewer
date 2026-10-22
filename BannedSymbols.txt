@@ -20,3 +20,8 @@ T:System.Net.NetworkInformation.Ping;Network access is not allowed (privacy rule
 T:System.Net.Quic.QuicConnection;Network access is not allowed (privacy rule)
 T:System.Net.Quic.QuicListener;Network access is not allowed (privacy rule)
 T:Microsoft.Maui.ApplicationModel.Browser;Do not open URLs in an in-app browser; use the confirmed external link flow
+T:Velopack.UpdateManager;App updates go through ExportViewer.Download.AppUpdater only (privacy rule)
+T:Velopack.VelopackApp;Use ExportViewer.Download.AppUpdater.RunStartupHooks (privacy rule)
+T:Velopack.Sources.SimpleWebSource;App updates go through ExportViewer.Download.AppUpdater only (privacy rule)
+T:Velopack.Sources.GithubSource;App updates go through ExportViewer.Download.AppUpdater only (privacy rule)
+T:Velopack.Sources.HttpClientFileDownloader;Network access is not allowed outside ExportViewer.Download (privacy rule)

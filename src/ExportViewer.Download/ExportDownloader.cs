@@ -15,7 +15,7 @@ public sealed record DownloadResult(ManifestFile File, string? Path, string? Pro
 }
 
 /// <summary>
-/// Downloads an export's zip files from claude.ai when the user asks. This is the app's only network code.
+/// Downloads an export's zip files from claude.ai when the user asks. Apart from <see cref="AppUpdater"/>, this is the app's only network code.
 /// <list type="bullet">
 /// <item>Only HTTPS to <see cref="AllowedHosts"/>. Redirects are followed by hand and each one is checked the same way.</item>
 /// <item>No cookies, no saved sign-in, no proxy password, no automatic decompression.</item>

@@ -5,12 +5,59 @@
 @inject ViewModeService View
 @inject LibrarySession Session
 @inject IJSRuntime JS
+@inject AppUpdates Updates
+@implements IDisposable
 
 <div class="page-head">
     <div>
         <h1>Settings</h1>
-        <p class="subtle">This app works offline. It only connects to the internet when you ask it to download an export from claude.ai, and it never changes your export files.</p>
+        <p class="subtle">This app works offline. It only connects to the internet to download an export from claude.ai when you ask, and to check for a newer version of the app. It never changes your export files.</p>
     </div>
+</div>
+
+<div class="card">
+    <h2>Updates</h2>
+    @if (!Updates.IsInstalled)
+    {
+        <p>Version @Updates.Version. This copy wasn't set up with the Windows installer, so it doesn't update itself.</p>
+    }
+    else
+    {
+        <p>Version @Updates.Version.
+            @switch (Updates.Status)
+            {
+                case UpdateStatus.Checking:
+                    <span>Checking for a newer version…</span>
+                    break;
+                case UpdateStatus.Downloading:
+                    <span>Downloading version @Updates.NewVersion (@Updates.Percent%)…</span>
+                    break;
+                case UpdateStatus.UpToDate:
+                    <span>This is the newest version.</span>
+                    break;
+                case UpdateStatus.Ready:
+                    <span>Version <strong>@Updates.NewVersion</strong> is ready. It is installed next time the app starts, or restart now.</span>
+                    break;
+            }
+        </p>
+        @if (Updates.Status == UpdateStatus.Failed && Updates.Problem is { } problem)
+        {
+            <div class="banner low" role="status">@problem</div>
+        }
+        @if (Updates.Status == UpdateStatus.Ready)
+        {
+            <button class="primary" @onclick="() => _confirmRestart = true">Restart and update</button>
+        }
+        else
+        {
+            <button @onclick="Updates.CheckAsync" disabled="@Updates.IsOnline">Check now</button>
+        }
+        <label style="display:flex;gap:.5rem;align-items:flex-start;margin-top:.8rem">
+            <input type="checkbox" checked="@Settings.Data.CheckForUpdates" @onchange="e => Settings.Update(d => d.CheckForUpdates = (bool)e.Value!)" />
+            <span>Check for updates when the app starts.
+                <span class="muted small">The app downloads new versions from the project's page on GitHub. Nothing about you or your exports is sent.</span></span>
+        </label>
+    }
 </div>
 
 <div class="card">
@@ -122,8 +169,8 @@
 <div class="card">
     <h2>About</h2>
     <dl class="props">
-        <dt>Version</dt><dd>@AppInfo.Current.VersionString</dd>
-        <dt>Internet access</dt><dd>None. The app makes no network connections, has no updates, telemetry or crash reporting.</dd>
+        <dt>Version</dt><dd>@Updates.Version</dd>
+        <dt>Internet access</dt><dd>Only to download an export from claude.ai when you ask, and to download app updates from GitHub (see Updates above). No telemetry or crash reporting.</dd>
         <dt>Your export files</dt><dd>Only read, never changed, moved or deleted.</dd>
     </dl>
 </div>
@@ -173,6 +220,20 @@
     </div>
 }
 
+@if (_confirmRestart)
+{
+    <div class="overlay" role="dialog" aria-modal="true">
+        <div class="dialog">
+            <h2>Restart and update?</h2>
+            <p>The app closes, installs version @Updates.NewVersion and opens again. The open export is closed first. Your flags and notes are already saved.</p>
+            <div class="actions">
+                <button @onclick="() => _confirmRestart = false">Cancel</button>
+                <button class="primary" @onclick="() => Updates.RestartToUpdate(Session)">Restart now</button>
+            </div>
+        </div>
+    </div>
+}
+
 @if (_message is not null)
 {
     <div class="banner info" style="position:fixed;bottom:1rem;right:1rem;max-width:420px" role="status">@_message</div>
@@ -183,10 +244,18 @@
     private IReadOnlyList<LocalDatabase> _reviews = [];
     private long _total, _unzipped;
     private LocalDatabase? _confirmDb, _confirmReview;
-    private bool _confirmAll;
+    private bool _confirmAll, _confirmRestart;
     private string? _message;
 
-    protected override void OnInitialized() => Refresh();
+    protected override void OnInitialized()
+    {
+        Updates.Changed += OnUpdatesChanged;
+        Refresh();
+    }
+
+    private void OnUpdatesChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Updates.Changed -= OnUpdatesChanged;
 
     private void Refresh()
     {

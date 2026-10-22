@@ -7,6 +7,7 @@ manifest-*.json
 *.json
 !**/*.csproj.json
 !global.json
+!dotnet-tools.json
 !**/Properties/launchSettings.json
 !**/wwwroot/**/*.json
 !tests/**/Fixtures/**/*.json

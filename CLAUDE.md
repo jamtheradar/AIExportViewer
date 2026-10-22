@@ -7,8 +7,10 @@ Offline desktop viewer for Claude Team/Enterprise organisation data exports (.NE
 
 ## Privacy rules (non-negotiable)
 
-- **No network code** outside `src/ExportViewer.Download`. `BannedSymbols.txt` + `Microsoft.CodeAnalysis.BannedApiAnalyzers` fail the build, and `PrivacyGuardTests` scans compiled assemblies (Download may use `System.Net.Http` only). Never suppress these. No telemetry, update checks, CDN assets, remote fonts or images.
-- **The only network use** is downloading export zips from a manifest, when the user clicks Download. HTTPS to `ExportDownloader.AllowedHosts` (`claude.ai`) only; redirects are checked hop by hop; no cookies or credentials. Never log or store a download link. Adding a host needs the owner's approval.
+- **No network code** outside `src/ExportViewer.Download`. `BannedSymbols.txt` + `Microsoft.CodeAnalysis.BannedApiAnalyzers` fail the build, and `PrivacyGuardTests` scans compiled assemblies (Download may use `System.Net.Http` only). Never suppress these. No telemetry, CDN assets, remote fonts or images.
+- **The only network uses** (both in `ExportViewer.Download`; adding a host needs the owner's approval):
+  - Downloading export zips from a manifest, when the user clicks Download. HTTPS to `ExportDownloader.AllowedHosts` (`claude.ai`) only; redirects are checked hop by hop; no cookies or credentials. Never log or store a download link.
+  - App updates (owner approved 2026-10-22): `AppUpdater` (Velopack) checks `AppUpdater.ReleasesUrl` (this repo's latest GitHub release) at start-up unless the user turns it off in Settings, downloads in the background and offers a restart. All its requests go through `UpdateDownloader`: HTTPS to `AppUpdater.AllowedHosts` only, hop-by-hop redirect checks, no cookies, credentials or Velopack-supplied headers, and the query string Velopack adds is dropped. Only the installed Windows app checks. Only `ExportViewer.Download` may reference Velopack; `BannedSymbols.txt` bans its network types elsewhere and `PrivacyGuardTests` checks it.
 - **Export files are read-only.** Open with `FileAccess.Read`; never write, move or rename anything in an export folder or zip.
 - **All rendered content is untrusted**, including chat text, tool output, attachments, project docs, memories and artifact HTML. Use `SafeHtmlRenderer` only. Never inject raw HTML with `MarkupString` unless it came from the sanitiser. Never load `http(s)` resources. Links open only through the confirmation dialog. Artifact HTML goes only into `<iframe sandbox="">` with its own CSP. Never run artifact JavaScript.
 - **Local storage**: everything goes under the single app data folder. It must appear in Settings with its size and be removed by "Delete all local data". The owner's goal is "offline, never on shared infrastructure": keeping the library database on the local PC is fine and is the default. Data is deleted only when the user chooses in Settings.
@@ -24,7 +26,8 @@ src/ExportViewer.Core          net10.0, no MAUI refs. Sources (folder/zip), coll
                                integrity checks, safe renderer, Audit/ (sensitive data check, watchlists),
                                Review/ (flags and notes store), Reports/ (PDF + CSV), Sources/ (zip unpacking)
 src/ExportViewer.App           MAUI Blazor Hybrid UI, file pickers, settings, platform glue
-src/ExportViewer.Download      manifest download (ExportDownloader), the only network-enabled project
+src/ExportViewer.Download      manifest download (ExportDownloader) and app updates (AppUpdater, Velopack);
+                               the only network-enabled project
 tests/ExportViewer.Core.Tests  xUnit; synthetic fixtures; demo export; large-file generator; network-ban test
 ```
 
@@ -53,6 +56,10 @@ dotnet build src/ExportViewer.App -f net10.0-windows10.0.19041.0 -t:Run
 ### Windows distribution
 
 The app needs the WebView2 runtime; it detects a missing runtime at startup and shows instructions.
+
+**Releases** are Velopack packages on GitHub Releases, built by `.github/workflows/release.yml` when a `v1.2.3` tag is pushed: build, test, self-contained publish with `ApplicationDisplayVersion` from the tag, `vpk pack` (pack ID `AIExportViewer`, so it installs per user to `%LOCALAPPDATA%\AIExportViewer`), `vpk upload github`. Output: `AIExportViewer-win-Setup.exe`, `-Portable.zip`, `.nupkg` full and delta packages and `releases.win.json`. The `vpk` tool version is pinned in `dotnet-tools.json` and must match the `Velopack` package version. Installed copies can only update once the repo is public. Not code signed yet (vpk supports `--signParams` / `--azureTrustedSignFile` when a certificate exists).
+
+`Platforms/Windows/Program.cs` replaces the generated WinUI `Main` (`DISABLE_XAML_GENERATED_MAIN`) so `AppUpdater.RunStartupHooks()` runs first. Keep it in step with the generated one if WinUI changes it.
 
 ```powershell
 # Self-contained single folder (no installer, xcopy deploy)
@@ -85,12 +92,14 @@ Entitlements: `com.apple.security.app-sandbox` = true, `com.apple.security.files
 
 Unpackaged Windows build: `%LOCALAPPDATA%\JamTheRadar\au.com.jamtheradar.aiexportviewer\Data` (follows `ApplicationId`). Settings → "Delete all local data" removes it. Contents:
 
-- `settings.json`: view mode, colours (Light/Dark), recent list, watchlists.
+- `settings.json`: view mode, colours (Light/Dark), recent list, watchlists, the update check switch.
 - `libraries/library-<hash>.db`: the rebuildable library copy, including the last sensitive data check (`scan_findings`, positions and masked values only).
 - `reviews/review-<hash>.db`: the reviewer's flags and notes. Kept apart from the library copy so a rebuild never loses them; same `<hash>` as the library.
 - `unzipped/<hash>/`: working copy of zip files while open. Removed on close, on exit and at the next start.
 - `exports-temp/`: Mac only, a report waiting for the save dialog. Removed straight after.
 - `logs/`.
+
+Outside the data folder, written by the installer rather than the app (no export data): the install folder `%LOCALAPPDATA%\AIExportViewer` (app, downloaded update packages, `velopack.log` with versions and GitHub URLs), and `%LOCALAPPDATA%\velopack\velopack.log` from uninstalled runs. Uninstalling removes the install folder but not the data folder.
 
 ### Driving the app for manual checks (dev only)
 

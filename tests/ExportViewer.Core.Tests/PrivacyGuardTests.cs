@@ -96,6 +96,28 @@ public class PrivacyGuardTests
         Assert.DoesNotContain(md.AssemblyReferences.Select(h => md.GetString(md.GetAssemblyReference(h).Name)), n => n == "ExportViewer.Download");
     }
 
+    /// <summary>The updater (Velopack) can reach the network, so only ExportViewer.Download may use it, through AppUpdater.</summary>
+    [Fact]
+    public void Only_the_download_project_uses_the_updater()
+    {
+        var root = RepoRoot();
+        foreach (var csproj in Directory.EnumerateFiles(Path.Combine(root, "src"), "*.csproj", SearchOption.AllDirectories))
+            if (Path.GetFileNameWithoutExtension(csproj) != "ExportViewer.Download")
+                Assert.False(File.ReadAllText(csproj).Contains("Velopack", StringComparison.OrdinalIgnoreCase), $"{Path.GetFileName(csproj)} must not reference Velopack");
+
+        var banned = File.ReadAllText(Path.Combine(root, "BannedSymbols.txt"));
+        foreach (var type in new[] { "T:Velopack.UpdateManager", "T:Velopack.VelopackApp", "T:Velopack.Sources.SimpleWebSource", "T:Velopack.Sources.HttpClientFileDownloader" })
+            Assert.Contains(type, banned);
+
+        foreach (var path in Assemblies().Select(a => (string)a[0]))
+        {
+            using var fs = File.OpenRead(path);
+            using var pe = new PEReader(fs);
+            var md = pe.GetMetadataReader();
+            Assert.DoesNotContain(md.AssemblyReferences.Select(h => md.GetString(md.GetAssemblyReference(h).Name)), n => n == "Velopack");
+        }
+    }
+
     [Fact]
     public void Banned_api_analyser_is_wired_into_every_project()
     {

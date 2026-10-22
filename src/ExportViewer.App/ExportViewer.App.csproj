@@ -14,11 +14,14 @@
 
         <ApplicationTitle>AI Export Viewer</ApplicationTitle>
         <ApplicationId>au.com.jamtheradar.aiexportviewer</ApplicationId>
-        <ApplicationDisplayVersion>0.1</ApplicationDisplayVersion>
+        <!-- The release workflow sets this from the tag (v1.2.3 gives 1.2.3). -->
+        <ApplicationDisplayVersion>0.1.0</ApplicationDisplayVersion>
         <ApplicationVersion>1</ApplicationVersion>
 
         <!-- Unpackaged by default (single-folder build). Pass -p:WindowsPackageType=MSIX for an MSIX. -->
         <WindowsPackageType Condition="'$(WindowsPackageType)' == ''">None</WindowsPackageType>
+        <!-- Platforms/Windows/Program.cs runs the installer's start-up work before WinUI starts. -->
+        <DefineConstants Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
 
         <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
         <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
@@ -29,6 +32,11 @@
         <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#2F4858" />
         <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#2F4858" BaseSize="128,128" />
         <MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- The licence and third-party notices go out with every build. -->
+        <None Include="..\..\LICENSE;..\..\THIRD-PARTY-NOTICES.md" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     </ItemGroup>
 
     <ItemGroup>

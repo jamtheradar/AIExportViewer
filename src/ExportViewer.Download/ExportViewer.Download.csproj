@@ -5,10 +5,15 @@
     <RootNamespace>ExportViewer.Download</RootNamespace>
     <!--
       Privacy rule: the only project allowed to use the network. It downloads export zip files from claude.ai when
-      the user asks, and nothing else. PrivacyGuardTests checks no other project sets this.
+      the user asks, and updates the installed app from the project's GitHub releases. Nothing else.
+      PrivacyGuardTests checks no other project sets this.
     -->
     <AllowNetworkAccess>true</AllowNetworkAccess>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Velopack" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\ExportViewer.Core\ExportViewer.Core.csproj" />

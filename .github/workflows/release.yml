@@ -1,0 +1,67 @@
+# Builds the Windows installer and update packages (Velopack) and publishes them as a GitHub release.
+# Start it by pushing a version tag: git tag v1.2.3 && git push origin v1.2.3
+# Installed copies find the new version through https://github.com/<repo>/releases/latest/download/releases.win.json,
+# so they can only update once the repository is public.
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Version from tag
+        shell: pwsh
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "The tag must look like v1.2.3, not ${{ github.ref_name }}" }
+          "VERSION=$version" >> $env:GITHUB_ENV
+
+      - name: Install the MAUI workload and vpk
+        run: |
+          dotnet workload install maui-windows
+          dotnet tool restore
+
+      - name: Build and test
+        run: |
+          dotnet build -c Release
+          dotnet test tests/ExportViewer.Core.Tests -c Release --no-build --filter "Category!=Performance"
+
+      - name: Publish
+        run: >
+          dotnet publish src/ExportViewer.App -f net10.0-windows10.0.19041.0 -c Release -r win-x64
+          -p:WindowsPackageType=None -p:SelfContained=true -p:WindowsAppSDKSelfContained=true
+          -p:ApplicationDisplayVersion=${{ env.VERSION }} -o publish
+
+      # The previous release lets vpk build a small delta update. There is none before the first release.
+      - name: Download the previous release
+        continue-on-error: true
+        run: dotnet vpk download github --repoUrl https://github.com/${{ github.repository }} --token ${{ secrets.GITHUB_TOKEN }} -o releases
+
+      - name: Pack
+        shell: pwsh
+        run: |
+          $pack = @('pack', '--packId', 'AIExportViewer', '--packVersion', $env:VERSION, '--packDir', 'publish',
+                    '--mainExe', 'ExportViewer.App.exe', '--packTitle', 'AI Export Viewer', '--packAuthors', 'JamTheRadar',
+                    '--outputDir', 'releases')
+          # MAUI turns the SVG app icon into an .ico during the build; the installer uses the same one.
+          $icon = Get-ChildItem src/ExportViewer.App/obj -Recurse -Filter appicon.ico -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($icon) { $pack += @('--icon', $icon.FullName) }
+          dotnet vpk @pack
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload to GitHub release
+        run: >
+          dotnet vpk upload github --repoUrl https://github.com/${{ github.repository }} --token ${{ secrets.GITHUB_TOKEN }}
+          -o releases --publish --tag ${{ github.ref_name }} --releaseName "AI Export Viewer ${{ env.VERSION }}"

@@ -18,7 +18,7 @@ public sealed class ManifestDownloads(AppLog log) : IDisposable
     /// <summary>Raised while downloading (progress) and when a download finishes.</summary>
     public event Action? Changed;
 
-    /// <summary>True while the app itself is downloading from claude.ai: the only time it is online.</summary>
+    /// <summary>True while the app itself is downloading from claude.ai. Apart from app updates, the only time it is online.</summary>
     public bool IsDownloading => _cts is not null;
 
     public DownloadProgress? Progress { get; private set; }
