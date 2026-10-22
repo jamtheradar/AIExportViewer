@@ -118,6 +118,20 @@ public class PrivacyGuardTests
         }
     }
 
+    /// <summary>Stands in for vpk's own check, which the release skips because the app reaches Velopack only through AppUpdater.</summary>
+    [Fact]
+    public void Windows_entry_point_runs_the_installer_start_up_work_first()
+    {
+        var root = RepoRoot();
+        var csproj = File.ReadAllText(Path.Combine(root, "src", "ExportViewer.App", "ExportViewer.App.csproj"));
+        var program = File.ReadAllText(Path.Combine(root, "src", "ExportViewer.App", "Platforms", "Windows", "Program.cs"));
+
+        Assert.Contains("DISABLE_XAML_GENERATED_MAIN", csproj);
+        var hooks = program.IndexOf("AppUpdater.RunStartupHooks();", StringComparison.Ordinal);
+        Assert.True(hooks >= 0, "Program.Main must call AppUpdater.RunStartupHooks()");
+        Assert.True(hooks < program.IndexOf("Application.Start", StringComparison.Ordinal), "AppUpdater.RunStartupHooks() must run before WinUI starts");
+    }
+
     [Fact]
     public void Banned_api_analyser_is_wired_into_every_project()
     {

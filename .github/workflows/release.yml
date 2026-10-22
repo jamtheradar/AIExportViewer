@@ -54,7 +54,9 @@ jobs:
         run: |
           $pack = @('pack', '--packId', 'AIExportViewer', '--packVersion', $env:VERSION, '--packDir', 'publish',
                     '--mainExe', 'ExportViewer.App.exe', '--packTitle', 'AI Export Viewer', '--packAuthors', 'JamTheRadar',
-                    '--outputDir', 'releases')
+                    '--runtime', 'win-x64', '--outputDir', 'releases', '--skipVeloAppCheck')
+          # vpk looks for VelopackApp in the app's own assembly, but only ExportViewer.Download may reference Velopack.
+          # PrivacyGuardTests.Windows_entry_point_runs_the_installer_start_up_work_first checks the call instead.
           # MAUI turns the SVG app icon into an .ico during the build; the installer uses the same one.
           $icon = Get-ChildItem src/ExportViewer.App/obj -Recurse -Filter appicon.ico -ErrorAction SilentlyContinue | Select-Object -First 1
           if ($icon) { $pack += @('--icon', $icon.FullName) }
