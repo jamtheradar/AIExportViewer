@@ -175,5 +175,28 @@ internal static class Schema
             title, body,
             tokenize = 'unicode61 remove_diacritics 2',
             prefix = '2 3');
+
+        -- Results of the last sensitive data and watchlist check. Only positions and masked values are stored;
+        -- the full value is read back from the indexed text when a reviewer chooses to reveal it.
+        CREATE TABLE IF NOT EXISTS scan_findings(
+            id INTEGER PRIMARY KEY,
+            source TEXT NOT NULL,
+            type TEXT NOT NULL,
+            list_id TEXT,
+            detector TEXT NOT NULL,
+            confidence INTEGER NOT NULL,
+            doc_id INTEGER,
+            in_title INTEGER NOT NULL DEFAULT 0,
+            start INTEGER,
+            length INTEGER,
+            location TEXT NOT NULL,
+            ref_id TEXT,
+            conversation_uuid TEXT,
+            account_uuid TEXT,
+            ts TEXT,
+            masked TEXT NOT NULL);
+        CREATE INDEX IF NOT EXISTS ix_findings_source ON scan_findings(source, type);
+        CREATE INDEX IF NOT EXISTS ix_findings_conv ON scan_findings(conversation_uuid);
+        CREATE INDEX IF NOT EXISTS ix_findings_doc ON scan_findings(doc_id);
         """;
 }

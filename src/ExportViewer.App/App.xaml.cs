@@ -10,7 +10,10 @@ public partial class App : Application
     protected override Window CreateWindow(IActivationState? activationState)
     {
         Page page = WebViewAvailable() ? new MainPage() : new WebViewMissingPage();
-        return new Window(page) { Title = "AI Export Viewer", MinimumWidth = 960, MinimumHeight = 640 };
+        var window = new Window(page) { Title = "AI Export Viewer", MinimumWidth = 960, MinimumHeight = 640 };
+        // Closing the library on exit removes the unzipped working copy of any zip files that were open.
+        window.Destroying += (_, _) => IPlatformApplication.Current?.Services.GetService<Services.LibrarySession>()?.Close();
+        return window;
     }
 
     private static bool WebViewAvailable()

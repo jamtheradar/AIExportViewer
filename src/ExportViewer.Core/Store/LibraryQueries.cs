@@ -44,6 +44,8 @@ public sealed record ConversationListItem(
     string Uuid, string Title, string? Summary, string? AccountUuid, string? UserName, string? CreatedAt, string? UpdatedAt,
     string? FirstMessageAt, string? LastMessageAt, int MessageCount, int TotalMessages, MessageTraits Traits, int ForkCount, Severity Integrity);
 
+public sealed record MessageSummary(string Uuid, string ConversationUuid, string Sender, string? CreatedAt, string Preview);
+
 public sealed record MessageRow(string Uuid, string? ParentUuid, string Sender, string? CreatedAt, int Seq, MessageTraits Traits, string Raw);
 
 public sealed record IntegrityRow(Severity Severity, string Code, string Detail, string? MessageUuid);
@@ -216,6 +218,38 @@ public sealed class LibraryQueries(LibraryDatabase db)
         using (var r = Reader(c, "SELECT severity, code, detail, message_uuid FROM integrity_flags WHERE conversation_uuid=$1 ORDER BY severity DESC, id", uuid))
             while (r.Read()) flags.Add(new IntegrityRow((Severity)r.GetInt32(0), r.GetString(1), r.GetString(2), S(r, 3)));
         return new ConversationDetail(header, raw, msgs, flags, Sources(c, "conversation", uuid));
+    }
+
+    /// <summary>List rows for the given conversations; IDs not in the library are left out.</summary>
+    public IReadOnlyDictionary<string, ConversationListItem> GetConversationHeaders(IEnumerable<string> uuids)
+    {
+        using var c = db.Open();
+        var d = new Dictionary<string, ConversationListItem>(StringComparer.Ordinal);
+        foreach (var chunk in uuids.Distinct().Chunk(400))
+        {
+            var names = string.Join(",", chunk.Select((_, i) => "$" + (i + 1)));
+            using var r = Reader(c, $"{ConversationSelect} WHERE c.uuid IN ({names})", chunk);
+            while (r.Read())
+            {
+                var item = ReadConversation(r);
+                d[item.Uuid] = item;
+            }
+        }
+        return d;
+    }
+
+    /// <summary>Sender, time and a short preview of the given messages; IDs not in the library are left out.</summary>
+    public IReadOnlyDictionary<string, MessageSummary> GetMessageSummaries(IEnumerable<string> uuids)
+    {
+        using var c = db.Open();
+        var d = new Dictionary<string, MessageSummary>(StringComparer.Ordinal);
+        foreach (var chunk in uuids.Distinct().Chunk(400))
+        {
+            var names = string.Join(",", chunk.Select((_, i) => "$" + (i + 1)));
+            using var r = Reader(c, $"SELECT uuid, conversation_uuid, sender, created_at, preview FROM messages WHERE uuid IN ({names})", chunk);
+            while (r.Read()) d[r.GetString(0)] = new MessageSummary(r.GetString(0), r.GetString(1), S(r, 2) ?? "unknown", S(r, 3), S(r, 4) ?? "");
+        }
+        return d;
     }
 
     public IReadOnlyList<ProjectSummary> GetProjects()

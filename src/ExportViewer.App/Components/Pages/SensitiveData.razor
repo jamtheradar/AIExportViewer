@@ -1,0 +1,187 @@
+@page "/sensitive"
+@inherits PageBase
+@inject AuditService Audit
+
+<div class="page-head">
+    <div>
+        <h1>Sensitive data</h1>
+        <p class="subtle">Personal and secret information people may have typed or pasted into Claude, such as tax file numbers, card numbers, passwords and keys.
+            These are pattern matches made on this computer, so each one needs a person to confirm it. Values stay hidden until you choose to show one.</p>
+    </div>
+    <ExportButtons Build="@(_ => BuildReport())" Kind="sensitive" Disabled="@(_total == 0)" />
+</div>
+
+<ScanPanel />
+
+@if (_hasRun)
+{
+    @if (_counts.Count > 0)
+    {
+        <div class="tiles" style="margin-top:1rem">
+            @foreach (var c in _counts)
+            {
+                var type = c.Type;
+                <button class="tile @(_type == type ? "selected" : "")" @onclick="() => ToggleType(type)" title="Show only this type">
+                    <div class="value">@Fmt.N(c.Count)</div>
+                    <div class="label">@AuditLabels.Type(c.Type)</div>
+                    <div class="label small">@Fmt.Plural(c.People, "person", "people")</div>
+                </button>
+            }
+        </div>
+    }
+
+    <div class="filters" role="search">
+        <label>Type
+            <select @bind="_type" @bind:after="Apply">
+                <option value="">All types</option>
+                @foreach (var c in _counts) { <option value="@c.Type">@AuditLabels.Type(c.Type)</option> }
+            </select>
+        </label>
+        <label>Person
+            <select @bind="_user" @bind:after="Apply">
+                <option value="">Everyone</option>
+                @foreach (var u in _users) { <option value="@u.Uuid">@u.DisplayName</option> }
+            </select>
+        </label>
+        <label>Where
+            <select @bind="_location" @bind:after="Apply">
+                <option value="">Anywhere</option>
+                @foreach (var l in Locations) { <option value="@l">@AuditLabels.Location(l)</option> }
+            </select>
+        </label>
+        <label>From <input type="date" @bind="_from" @bind:after="Apply" /></label>
+        <label>To <input type="date" @bind="_to" @bind:after="Apply" /></label>
+        <label>How sure
+            <select @bind="_sure" @bind:after="ApplyAndCount">
+                <option value="@Confidence.High">Likely only</option>
+                <option value="@Confidence.Medium">Likely and possible</option>
+                <option value="@Confidence.Low">Everything, including unsure</option>
+            </select>
+        </label>
+    </div>
+
+    @if (_sure > Confidence.Low && _hidden > 0)
+    {
+        <p class="small muted">@Fmt.Plural(_hidden, "unsure match is", "unsure matches are") not shown, mostly contact details in web pages Claude looked up.
+            <button class="link small" @onclick="ShowEverything">Show them too</button></p>
+    }
+    <FindingsTable Rows="_rows" Expert="Expert" EmptyText="@(_counts.Count == 0 ? "Nothing was found." : "No matches for these filters.")" />
+    <Pager Total="_total" Offset="_offset" OffsetChanged="Page" />
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "conversation")] public string? ConversationParam { get; set; }
+
+    private static readonly string[] Locations =
+    [
+        SearchKind.Message, SearchKind.Attachment, SearchKind.Tool, SearchKind.Conversation, SearchKind.ProjectDoc, SearchKind.Project,
+        SearchKind.Memory, SearchKind.Artifact, FindingLocation.UserDetails, FindingLocation.SignIn,
+    ];
+
+    private bool _hasRun;
+    private IReadOnlyList<FindingCount> _counts = [];
+    private IReadOnlyList<UserSummary> _users = [];
+    private IReadOnlyList<FindingRow> _rows = [];
+    private int _total, _offset;
+    private string _type = "", _user = "", _location = "";
+    private DateTime? _from, _to;
+    private Confidence _sure = Confidence.Medium;
+    private int _hidden;
+    private int _auditVersion = -1;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Audit.Changed += OnAuditChanged;
+    }
+
+    protected override void LoadData()
+    {
+        _auditVersion = Audit.Version;
+        _users = Session.Queries.GetUsers();
+        _hasRun = Session.Audit.GetScanInfo().HasRun;
+        Count();
+        Query();
+    }
+
+    private void Count()
+    {
+        _counts = Session.Audit.GetCounts(FindingSource.Sensitive, _sure);
+        _hidden = Session.Audit.GetCounts(FindingSource.Sensitive).Sum(c => c.Count) - _counts.Sum(c => c.Count);
+    }
+
+    private void ApplyAndCount()
+    {
+        Count();
+        Apply();
+    }
+
+    private void ShowEverything()
+    {
+        _sure = Confidence.Low;
+        ApplyAndCount();
+    }
+
+    private void OnAuditChanged() => InvokeAsync(() =>
+    {
+        if (Audit.Running || Audit.Version == _auditVersion || !Session.IsReady) return;
+        _offset = 0;
+        LoadData();
+        StateHasChanged();
+    });
+
+    private void ToggleType(string type)
+    {
+        _type = _type == type ? "" : type;
+        Apply();
+    }
+
+    private void Apply()
+    {
+        _offset = 0;
+        Query();
+    }
+
+    private void Page(int offset)
+    {
+        _offset = offset;
+        Query();
+    }
+
+    private FindingFilter Filter(int limit, int offset) => new(
+        FindingSource.Sensitive,
+        Type: _type.Length == 0 ? null : _type,
+        AccountUuid: _user.Length == 0 ? null : _user,
+        Location: _location.Length == 0 ? null : _location,
+        ConversationUuid: ConversationParam,
+        MinConfidence: _sure,
+        From: _from is { } f ? new DateTimeOffset(f.Date, TimeZoneInfo.Local.GetUtcOffset(f.Date)) : null,
+        To: _to is { } t ? new DateTimeOffset(t.Date.AddDays(1), TimeZoneInfo.Local.GetUtcOffset(t.Date)) : null,
+        Limit: limit,
+        Offset: offset);
+
+    private void Query()
+    {
+        if (!Session.IsReady) return;
+        (_total, _rows) = Session.Audit.GetFindings(Filter(50, _offset));
+    }
+
+    private Report BuildReport()
+    {
+        var (total, rows) = Session.Audit.GetFindings(Filter(5000, 0));
+        var filters = new List<(string, string)>();
+        if (_type.Length > 0) filters.Add(("Type", AuditLabels.Type(_type)));
+        if (_user.Length > 0) filters.Add(("Person", _users.FirstOrDefault(u => u.Uuid == _user)?.DisplayName ?? _user));
+        if (_location.Length > 0) filters.Add(("Where", AuditLabels.Location(_location)));
+        if (_from is not null || _to is not null) filters.Add(("Dates", $"{_from:d MMM yyyy} to {_to:d MMM yyyy}".Trim()));
+        filters.Add(("How sure", _sure switch { Confidence.High => "Likely only", Confidence.Medium => "Likely and possible", _ => "Everything, including unsure" }));
+        if (ConversationParam is not null) filters.Add(("Conversation", rows.FirstOrDefault()?.Title ?? ConversationParam));
+        return ReportBuilder.Findings(Session.ReportContext(), FindingSource.Sensitive, rows, total, Session.Audit.GetScanInfo(), filters);
+    }
+
+    public override void Dispose()
+    {
+        Audit.Changed -= OnAuditChanged;
+        base.Dispose();
+    }
+}

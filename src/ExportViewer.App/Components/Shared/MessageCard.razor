@@ -1,7 +1,7 @@
 @{
     var human = Content.Sender == "human";
 }
-<article id="msg-@Content.Uuid" class="msg @(human ? "human" : "assistant") @(OffBranch ? "off-branch" : "")">
+<article id="msg-@Content.Uuid" class="msg @(human ? "human" : "assistant") @(OffBranch ? "off-branch" : "") @(Flag is null ? "" : "flagged")">
     <div class="msg-head">
         <span class="who">@(human ? (UserName ?? "Person") : Content.Sender == "assistant" ? "Claude" : Content.Sender)</span>
         <span class="when">@Fmt.Date(Content.CreatedAt, Expert ? ViewMode.Expert : ViewMode.Basic)</span>
@@ -16,8 +16,13 @@
             }
             @if (OffBranch) { <span class="tag">Not on the version shown</span> }
             @if (Expert) { <span class="muted mono small" title="Message ID">@Content.Uuid[..Math.Min(8, Content.Uuid.Length)]</span> }
+            @HeadExtra
         </span>
     </div>
+    @if (Flag is not null)
+    {
+        <div class="flag-note"><span aria-hidden="true">⚑</span> Flagged@(Flag.Note.Length > 0 ? ": " : "")@Flag.Note</div>
+    }
 
     @if (Content.Blocks.Count == 0)
     {
@@ -107,6 +112,11 @@
     [Parameter] public int SiblingIndex { get; set; }
     [Parameter] public int SiblingCount { get; set; } = 1;
     [Parameter] public EventCallback<int> Switch { get; set; }
+
+    /// <summary>Extra controls at the right of the message header, such as the flag button.</summary>
+    [Parameter] public RenderFragment? HeadExtra { get; set; }
+
+    [Parameter] public ReviewFlag? Flag { get; set; }
 
     private static string HostOf(string? url) => Uri.TryCreate(url, UriKind.Absolute, out var u) ? u.Host : url ?? "";
 }

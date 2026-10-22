@@ -1,0 +1,137 @@
+@page "/flags"
+@inherits PageBase
+
+<div class="page-head">
+    <div>
+        <h1>Flags and notes</h1>
+        <p class="subtle">Conversations and messages you have flagged for follow-up, with your notes. They are kept on this computer only, with this export, and never added to the export files.
+            To flag something, open a conversation and use the ⚑ Flag buttons.</p>
+    </div>
+    <ExportButtons Build="BuildReport" Kind="flags" OfferFullValues="true" Disabled="@(_shown.Count == 0)" />
+</div>
+
+@if (Session.IsReady && Session.Reviews.InMemory)
+{
+    <div class="banner medium">“Don't save a copy” is on in Settings, so flags and notes are kept in memory only and will be forgotten when you close this export.</div>
+}
+
+<div class="filters" role="search">
+    <label>Person
+        <select @bind="_user" @bind:after="Apply">
+            <option value="">Everyone</option>
+            @foreach (var u in _people) { <option value="@u.Uuid">@u.Name</option> }
+        </select>
+    </label>
+    <label>Flagged
+        <select @bind="_what" @bind:after="Apply">
+            <option value="">Conversations and messages</option>
+            <option value="conversation">Conversations only</option>
+            <option value="message">Messages only</option>
+        </select>
+    </label>
+    <label>Note contains <input type="text" @bind="_text" @bind:event="oninput" @bind:after="Apply" placeholder="Any" /></label>
+</div>
+
+@if (_shown.Count == 0)
+{
+    <div class="empty">@(_all.Count == 0 ? "Nothing has been flagged yet." : "No flags match these filters.")</div>
+}
+else
+{
+    <div class="table-wrap">
+        <table class="data">
+            <thead>
+                <tr><th>Flagged</th><th>Conversation</th><th>Person</th><th>Message</th><th>Note</th><th></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var i in _shown)
+                {
+                    var item = i;
+                    <tr>
+                        <td class="nowrap small">@When(item.Flag.UpdatedAt)</td>
+                        <td>
+                            @if (item.ConversationTitle is { } title) { <a href="@($"conversations/{item.Flag.ConversationUuid}")">@title</a> }
+                            else { <span class="muted">Not in this library</span> }
+                            @if (item.Flag.IsConversation) { <div><span class="tag">Whole conversation</span></div> }
+                        </td>
+                        <td class="nowrap">@(item.UserName ?? "")</td>
+                        <td class="small">
+                            @if (!item.Flag.IsConversation)
+                            {
+                                @if (item.MessagePreview is { } preview)
+                                {
+                                    <a href="@($"conversations/{item.Flag.ConversationUuid}?m={Uri.EscapeDataString(item.Flag.MessageUuid!)}")">
+                                        <strong>@(item.MessageSender == "assistant" ? "Claude" : item.UserName ?? "Person")</strong>, @When(item.MessageAt)
+                                    </a>
+                                    <div class="muted">@preview</div>
+                                }
+                                else { <span class="muted">Message not in this library</span> }
+                            }
+                        </td>
+                        <td class="note-cell">@item.Flag.Note</td>
+                        <td class="num nowrap">
+                            <FlagButton ConversationUuid="@item.Flag.ConversationUuid" MessageUuid="@item.Flag.MessageUuid" Flag="item.Flag" OnChanged="Reload" />
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <p class="small muted">@Fmt.Plural(_shown.Count, "flag", "flags")@(_shown.Count != _all.Count ? $" of {_all.Count}" : "")</p>
+    <button class="danger" style="margin-top:1rem" @onclick="() => _confirmClear = true">Remove all flags</button>
+}
+
+@if (_confirmClear)
+{
+    <div class="overlay" role="dialog" aria-modal="true">
+        <div class="dialog">
+            <h2>Remove all @Fmt.Plural(_all.Count, "flag", "flags")?</h2>
+            <p>Every flag and note for this export is deleted from this computer. This can't be undone.</p>
+            <div class="actions">
+                <button @onclick="() => _confirmClear = false">Cancel</button>
+                <button class="danger" @onclick="ClearAll">Remove all</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<FlagListItem> _all = [];
+    private List<FlagListItem> _shown = [];
+    private List<(string Uuid, string Name)> _people = [];
+    private string _user = "", _what = "", _text = "";
+    private bool _confirmClear;
+
+    protected override void LoadData()
+    {
+        _all = FlagList.Build(Session.Reviews.All(), Session.Queries);
+        _people = _all.Where(i => i.AccountUuid is not null).Select(i => (i.AccountUuid!, i.UserName ?? "Unknown person"))
+            .Distinct().OrderBy(p => p.Item2, StringComparer.CurrentCultureIgnoreCase).ToList();
+        Apply();
+    }
+
+    private void Apply()
+    {
+        _shown = _all.Where(i =>
+                (_user.Length == 0 || i.AccountUuid == _user)
+                && (_what.Length == 0 || (_what == "conversation") == i.Flag.IsConversation)
+                && (_text.Trim().Length == 0 || i.Flag.Note.Contains(_text.Trim(), StringComparison.CurrentCultureIgnoreCase)))
+            .ToList();
+    }
+
+    private void ClearAll()
+    {
+        Session.Reviews.Clear();
+        _confirmClear = false;
+        Reload();
+    }
+
+    private Report BuildReport(bool mask)
+    {
+        var filters = new List<(string, string)>();
+        if (_user.Length > 0) filters.Add(("Person", _people.FirstOrDefault(p => p.Uuid == _user).Name ?? _user));
+        if (_what.Length > 0) filters.Add(("Flagged", _what == "conversation" ? "Conversations only" : "Messages only"));
+        if (_text.Trim().Length > 0) filters.Add(("Note contains", _text.Trim()));
+        return ReportBuilder.Flags(Session.ReportContext(), _shown, filters, mask);
+    }
+}

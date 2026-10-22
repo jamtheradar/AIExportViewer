@@ -6,6 +6,7 @@
         <h1>Search</h1>
         <p class="subtle">Search every conversation, attachment, project document, memory and page in the export.</p>
     </div>
+    <ExportButtons Build="BuildReport" Kind="search" OfferFullValues="true" Disabled="@(_results is not { Total: > 0 })" />
 </div>
 
 <div class="card" style="margin-bottom:1rem">
@@ -150,6 +151,20 @@
     {
         var next = Session.Search.Search(Request(_hits.Count));
         _hits.AddRange(next.Hits);
+    }
+
+    /// <summary>All results (up to 5,000) for the search as it is set up now, for a PDF or CSV.</summary>
+    private Report BuildReport(bool mask)
+    {
+        var results = Session.Search.Search(Request(0) with { Limit = 5000 });
+        var filters = new List<(string, string)>
+        {
+            ("Person", _user.Length == 0 ? "Everyone" : _users.FirstOrDefault(u => u.Uuid == _user)?.DisplayName ?? _user),
+        };
+        if (_from is not null || _to is not null) filters.Add(("Dates", $"{_from:d MMM yyyy} to {_to:d MMM yyyy}".Trim()));
+        filters.Add(("Looked in", _kinds.Count == Kinds.Length ? "Everything" : string.Join(", ", Kinds.Where(k => _kinds.Contains(k.Key)).Select(k => k.Label))));
+        filters.Add(("Order", _sort switch { SearchSort.Newest => "Newest first", SearchSort.Oldest => "Oldest first", _ => "Best match" }));
+        return ReportBuilder.Search(Session.ReportContext(), _q, filters, results.Total, results.Hits, KindLabel, mask);
     }
 
     private static string KindLabel(string kind) => Kinds.FirstOrDefault(k => k.Key == kind).Label ?? kind;

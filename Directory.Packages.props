@@ -1,10 +1,18 @@
 <Project>
   <!-- Ask the owner before adding a package here (see CLAUDE.md). -->
+  <PropertyGroup>
+    <!-- Lets a PackageVersion below override a vulnerable transitive dependency. -->
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="5.6.0" />
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.13" />
     <PackageVersion Include="Markdig" Version="1.4.2" />
     <PackageVersion Include="HtmlSanitizer" Version="9.2.1039" />
+    <!-- 6.2.4 is the last MIT-licensed release; 6.5 and later are AGPL. Do not upgrade without the owner's approval. -->
+    <PackageVersion Include="PDFsharp-MigraDoc" Version="6.2.4" />
+    <!-- PDFsharp 6.2 depends on an older release, which has known vulnerabilities. Pinned to the patched release. -->
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
     <PackageVersion Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
     <PackageVersion Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="$(MauiVersion)" />
     <PackageVersion Include="xunit" Version="2.9.3" />

@@ -1,0 +1,76 @@
+@inject FileSaver Saver
+@inject AppLog Log
+
+<span class="export-buttons">
+    <button @onclick="() => SaveAsync(true)" disabled="@(_busy || Disabled)" title="Save a PDF for your records">Save as PDF</button>
+    <button @onclick="() => SaveAsync(false)" disabled="@(_busy || Disabled)" title="Save a CSV file that opens in Excel">Save as CSV</button>
+    @if (OfferFullValues)
+    {
+        <label class="check small" title="Saved reports hide card numbers, tax file numbers, passwords, keys and similar values unless this is ticked">
+            <input type="checkbox" @bind="_full" /> Include full values
+        </label>
+    }
+    @if (_status is not null) { <span class="small @(_failed ? "error-text" : "muted")" role="status">@_status</span> }
+</span>
+
+@code {
+    /// <summary>Builds the report; the argument is true when sensitive values should be masked. Runs off the UI thread.</summary>
+    [Parameter, EditorRequired] public Func<bool, Report> Build { get; set; } = default!;
+
+    /// <summary>Show the "Include full values" option. Without it, reports are always masked.</summary>
+    [Parameter] public bool OfferFullValues { get; set; }
+
+    /// <summary>Short name of the report kind for the log (never content).</summary>
+    [Parameter] public string Kind { get; set; } = "report";
+
+    [Parameter] public bool Disabled { get; set; }
+
+    private bool _busy;
+    private bool _full;
+    private bool _failed;
+    private string? _status;
+
+    private async Task SaveAsync(bool pdf)
+    {
+        _busy = true;
+        _failed = false;
+        _status = "Preparing…";
+        try
+        {
+            var mask = !(OfferFullValues && _full);
+            var report = await Task.Run(() => Build(mask));
+            var bytes = await Task.Run(() => pdf ? PdfReportWriter.ToBytes(report) : CsvReportWriter.ToBytes(report));
+            _status = null;
+            StateHasChanged();
+            var path = await Saver.SaveAsync(report.FileName(pdf ? "pdf" : "csv"), bytes);
+            if (path is not null)
+            {
+                Log.Write($"report saved: kind={Kind} format={(pdf ? "pdf" : "csv")} rows={report.Rows.Count} masked={mask}");
+                _status = $"Saved. Keep it somewhere safe: it contains staff data.";
+            }
+        }
+        catch (ReportException ex)
+        {
+            Fail(ex.Message);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Fail("The file could not be saved there. Choose another folder and try again.");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or Microsoft.Data.Sqlite.SqliteException)
+        {
+            Log.Write($"report failed: kind={Kind} {ex.GetType().Name}");
+            Fail("The report could not be made. Close and reopen the export, then try again.");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Fail(string message)
+    {
+        _failed = true;
+        _status = message;
+    }
+}

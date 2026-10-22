@@ -9,6 +9,7 @@
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="Markdig" />
     <PackageReference Include="HtmlSanitizer" />
+    <PackageReference Include="PDFsharp-MigraDoc" />
   </ItemGroup>
 
   <ItemGroup>

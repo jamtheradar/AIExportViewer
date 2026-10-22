@@ -1,4 +1,5 @@
 @inject NavigationManager Nav
+@inject LibrarySession Session
 
 @if (Items.Count == 0)
 {
@@ -25,6 +26,7 @@ else
                     <tr class="clickable" @onclick="@(() => Nav.NavigateTo($"conversations/{c.Uuid}"))">
                         <td>
                             <a href="@($"conversations/{c.Uuid}")" @onclick:stopPropagation="true">@c.Title</a>
+                            @if (_flagged.Contains(c.Uuid)) { <span class="flag-mark" title="You flagged this conversation or a message in it">⚑</span> }
                         </td>
                         @if (ShowUser) { <td class="nowrap">@(c.UserName ?? "Unknown person")</td> }
                         @if (Expert) { <td class="nowrap small">@Fmt.Date(c.FirstMessageAt, ViewMode.Expert)</td> }
@@ -53,4 +55,9 @@ else
     [Parameter, EditorRequired] public IReadOnlyList<ConversationListItem> Items { get; set; } = [];
     [Parameter] public bool ShowUser { get; set; } = true;
     [Parameter] public bool Expert { get; set; }
+
+    private IReadOnlySet<string> _flagged = new HashSet<string>();
+
+    protected override void OnParametersSet() =>
+        _flagged = Session.IsReady ? Session.Reviews.FlaggedConversations() : new HashSet<string>();
 }

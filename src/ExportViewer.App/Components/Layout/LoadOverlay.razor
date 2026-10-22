@@ -2,7 +2,26 @@
 @implements IDisposable
 @inject LibrarySession Session
 
-@if (Session.State == SessionState.Loading)
+@if (Session.State == SessionState.Unzipping)
+{
+    var u = Session.Unzip;
+    <div class="overlay" role="dialog" aria-modal="true" aria-labelledby="unzip-title">
+        <div class="dialog">
+            <h2 id="unzip-title">Unzipping the export</h2>
+            <p class="subtle">@(u?.CurrentZip is { } z ? $"Unzipping {z}…" : "Checking the zip files…")</p>
+            <div class="progress" aria-hidden="true"><div style="width:@UnzipPercent(u)%"></div></div>
+            @if (u is { BytesTotal: > 0 })
+            {
+                <p class="small muted">Zip file @(Math.Min(u.ZipsDone + 1, u.ZipsTotal)) of @u.ZipsTotal · @Fmt.Bytes(u.BytesDone) of @Fmt.Bytes(u.BytesTotal)</p>
+            }
+            <p class="small muted">The zip files are unzipped into the app's own folder on this computer and removed again when you close the export. The zip files themselves are not changed.</p>
+            <div class="actions">
+                <button @onclick="Session.Cancel">Stop</button>
+            </div>
+        </div>
+    </div>
+}
+else if (Session.State == SessionState.Loading)
 {
     var p = Session.Progress;
     <div class="overlay" role="dialog" aria-modal="true" aria-labelledby="load-title">
@@ -54,6 +73,9 @@ else if (Session.State == SessionState.NeedsRebuild)
     private static string Percent(LoadProgress? p) =>
         p is { BytesTotal: > 0 } ? Math.Clamp(100.0 * p.BytesDone / p.BytesTotal, 2, 100).ToString("F0", System.Globalization.CultureInfo.InvariantCulture)
         : p?.Stage == LoadStage.Finishing ? "100" : "2";
+
+    private static string UnzipPercent(ExportViewer.Core.Sources.UnzipProgress? u) =>
+        u is { BytesTotal: > 0 } ? Math.Clamp(100.0 * u.BytesDone / u.BytesTotal, 2, 100).ToString("F0", System.Globalization.CultureInfo.InvariantCulture) : "2";
 
     public void Dispose() => Session.Changed -= OnChanged;
 }

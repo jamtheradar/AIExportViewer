@@ -1,0 +1,89 @@
+@implements IDisposable
+@inject AuditService Audit
+@inject LibrarySession Session
+
+<div class="card scan-panel">
+    @if (Audit.Running)
+    {
+        var p = Audit.Progress;
+        <div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap">
+            <div style="flex:1;min-width:240px">
+                <strong>Checking the export…</strong>
+                <div class="progress" aria-hidden="true" style="margin:.4rem 0"><div style="width:@Percent(p)%"></div></div>
+                <span class="small muted">
+                    @if (p is { ItemsTotal: > 0 }) { <span>@Fmt.N(p.ItemsDone) of @Fmt.N(p.ItemsTotal) items · @Fmt.Plural(p.Findings, "match", "matches") so far</span> }
+                    else { <span>Starting…</span> }
+                </span>
+            </div>
+            <button @onclick="Audit.Cancel">Stop</button>
+        </div>
+    }
+    else
+    {
+        <div style="display:flex;gap:1rem;align-items:flex-start;flex-wrap:wrap">
+            <div style="flex:1;min-width:240px">
+                @if (_info is not { HasRun: true })
+                {
+                    <strong>Not checked yet.</strong>
+                    <p class="small subtle">The check reads every message, attachment, tool result, project, memory and page in the export, on this computer.
+                        For a large export it can take a few minutes. You can keep using the app while it runs.</p>
+                }
+                else
+                {
+                    <strong>Last checked @Fmt.Date(_info.At!.Value.UtcDateTime.ToString("O"), ViewMode.Basic)</strong>
+                    <span class="small muted"> · @Fmt.Plural(_info.Items, "item", "items") read</span>
+                    @if (_info.LibraryChanged)
+                    {
+                        <p class="small warn-text">More files have been loaded since then. Check again to include them.</p>
+                    }
+                    @if (_info.RulesChanged)
+                    {
+                        <p class="small warn-text">This version of the app checks for more kinds of data. Check again to use the new rules.</p>
+                    }
+                    @if (_info.WatchlistFingerprint != Audit.WatchlistFingerprint)
+                    {
+                        <p class="small warn-text">The watchlists have changed since the last check. Check again to see matches for the current lists.</p>
+                    }
+                    @foreach (var problem in _info.Problems)
+                    {
+                        <p class="small warn-text">@problem</p>
+                    }
+                }
+                @if (Audit.Error is { } error)
+                {
+                    <p class="small error-text" role="alert">@error</p>
+                }
+            </div>
+            <button class="primary" @onclick="Audit.RunAsync" disabled="@(!Session.IsReady)">@(_info is { HasRun: true } ? "Check again" : "Check now")</button>
+        </div>
+    }
+</div>
+
+@code {
+    private ScanInfo? _info;
+
+    protected override void OnInitialized()
+    {
+        Audit.Changed += OnChanged;
+        Session.Changed += OnChanged;
+    }
+
+    protected override void OnParametersSet() => Refresh();
+
+    private void Refresh() => _info = Session.IsReady ? Session.Audit.GetScanInfo() : null;
+
+    private void OnChanged() => InvokeAsync(() =>
+    {
+        if (!Audit.Running) Refresh();
+        StateHasChanged();
+    });
+
+    private static string Percent(ScanProgress? p) =>
+        p is { ItemsTotal: > 0 } ? Math.Clamp(100.0 * p.ItemsDone / p.ItemsTotal, 2, 100).ToString("F0", System.Globalization.CultureInfo.InvariantCulture) : "2";
+
+    public void Dispose()
+    {
+        Audit.Changed -= OnChanged;
+        Session.Changed -= OnChanged;
+    }
+}

@@ -103,6 +103,22 @@ public class PerformanceTests(LargeLibraryFixture lib, ITestOutputHelper output)
         Assert.True(sw.ElapsedMilliseconds < 1000);
     }
 
+    [Fact]
+    public void Sensitive_data_check_covers_a_500MB_export_in_a_few_minutes()
+    {
+        var lists = new[] { new Audit.Watchlist { Name = "Perf", Terms = [LargeExportGenerator.RareWord, "quokka habitat"] } };
+        var sw = Stopwatch.StartNew();
+        var s = new Audit.AuditScanner(lib.Db).Run(lists);
+        sw.Stop();
+        output.WriteLine($"Check: {s.Items:N0} items, {s.Findings:N0} findings ({s.WatchlistHits:N0} watchlist) in {sw.Elapsed.TotalSeconds:F1}s");
+
+        Assert.True(s.Items >= lib.Messages);
+        Assert.True(sw.Elapsed < TimeSpan.FromMinutes(5), $"Check took {sw.Elapsed}");
+        var page = Stopwatch.StartNew();
+        new Audit.AuditQueries(lib.Db).GetFindings(new Audit.FindingFilter(Audit.FindingSource.Watchlist));
+        Assert.True(page.ElapsedMilliseconds < 1000, $"First page of findings took {page.ElapsedMilliseconds} ms");
+    }
+
     private string CommonPhrase()
     {
         // Two consecutive words from a real message, so the phrase certainly exists.

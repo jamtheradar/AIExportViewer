@@ -52,6 +52,35 @@
         <p class="muted">No saved copies.</p>
     }
 
+    <h3>Flags and notes</h3>
+    <p class="small subtle">Your flags and notes are kept apart from the saved copies, so deleting or re-reading a copy doesn't lose them.</p>
+    @if (_reviews.Count > 0)
+    {
+        <div class="table-wrap" style="margin:.6rem 0">
+            <table class="data">
+                <thead><tr><th>Flags and notes for</th><th class="num">Size</th><th>Last changed</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var r in _reviews)
+                    {
+                        <tr>
+                            <td class="mono small">@(r.LibraryRoot ?? Path.GetFileName(r.FilePath))</td>
+                            <td class="num">@Fmt.Bytes(r.Bytes)</td>
+                            <td class="nowrap">@r.LastWrite.ToString("d MMM yyyy, h:mm tt")</td>
+                            <td class="num"><button class="danger" @onclick="() => _confirmReview = r">Delete</button></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else
+    {
+        <p class="muted">No flags or notes saved.</p>
+    }
+
+    <p class="small">Watchlists: @Fmt.Plural(Settings.Data.Watchlists.Count, "list", "lists") saved in the settings file.
+        @if (_unzipped > 0) { <span>Unzipped working copy of the open zip files: @Fmt.Bytes(_unzipped) (removed when you close the export).</span> }</p>
+
     <label style="display:flex;gap:.5rem;align-items:flex-start;margin:.8rem 0">
         <input type="checkbox" checked="@Settings.Data.MemoryOnly" @onchange="e => Settings.Update(d => d.MemoryOnly = (bool)e.Value!)" />
         <span>Don't save a copy. Keep everything in memory only, so nothing is written to disk.
@@ -59,7 +88,7 @@
     </label>
 
     <button class="danger" @onclick="() => _confirmAll = true">Delete all local data</button>
-    <span class="small muted" style="margin-left:.5rem">Removes the saved copies, recent folders list, settings and log. Your export files are not touched.</span>
+    <span class="small muted" style="margin-left:.5rem">Removes the saved copies, flags and notes, watchlists, recent list, settings and log. Your export files are not touched.</span>
 </div>
 
 <div class="card">
@@ -104,12 +133,27 @@
     </div>
 }
 
+@if (_confirmReview is { } review)
+{
+    <div class="overlay" role="dialog" aria-modal="true">
+        <div class="dialog">
+            <h2>Delete these flags and notes?</h2>
+            <p class="mono small">@(review.LibraryRoot ?? review.FilePath)</p>
+            <p>Every flag and note you made for this export is removed from this computer. This can't be undone.</p>
+            <div class="actions">
+                <button @onclick="() => _confirmReview = null">Cancel</button>
+                <button class="danger" @onclick="() => DeleteReview(review)">Delete</button>
+            </div>
+        </div>
+    </div>
+}
+
 @if (_confirmAll)
 {
     <div class="overlay" role="dialog" aria-modal="true">
         <div class="dialog">
             <h2>Delete all local data?</h2>
-            <p>This closes the open export and removes everything the app has stored on this computer (@Fmt.Bytes(_total)): saved copies, the recent folders list, settings and the log.</p>
+            <p>This closes the open export and removes everything the app has stored on this computer (@Fmt.Bytes(_total)): saved copies, your flags and notes, watchlists, the recent list, settings and the log.</p>
             <p>Your export files are not touched.</p>
             <div class="actions">
                 <button @onclick="() => _confirmAll = false">Cancel</button>
@@ -126,8 +170,9 @@
 
 @code {
     private IReadOnlyList<LocalDatabase> _dbs = [];
-    private long _total;
-    private LocalDatabase? _confirmDb;
+    private IReadOnlyList<LocalDatabase> _reviews = [];
+    private long _total, _unzipped;
+    private LocalDatabase? _confirmDb, _confirmReview;
     private bool _confirmAll;
     private string? _message;
 
@@ -136,7 +181,9 @@
     private void Refresh()
     {
         _dbs = Local.Databases();
+        _reviews = Local.Reviews();
         _total = Local.TotalBytes();
+        _unzipped = Local.UnzippedBytes();
     }
 
     private void SetDefault(ViewMode mode)
@@ -149,6 +196,12 @@
     {
         _confirmDb = null;
         Run(() => Local.DeleteDatabase(db.FilePath), "Saved copy deleted.");
+    }
+
+    private void DeleteReview(LocalDatabase review)
+    {
+        _confirmReview = null;
+        Run(() => Local.DeleteReview(review.FilePath), "Flags and notes deleted.");
     }
 
     private void DeleteAll()

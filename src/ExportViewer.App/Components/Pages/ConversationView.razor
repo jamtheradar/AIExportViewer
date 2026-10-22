@@ -18,8 +18,30 @@
             @if (_tree is { ForkCount: > 0 }) { <span> · edited or retried @Fmt.Plural(_tree.ForkCount, "time", "times")</span> }
         </p>
     </div>
-    <button @onclick='() => Nav.NavigateTo("conversations")'>Back to list</button>
+    <div class="head-actions">
+        <FlagButton ConversationUuid="@Id" Flag="@_flags.GetValueOrDefault("")" OnChanged="LoadFlags" />
+        <ExportButtons Build="BuildReport" Kind="conversation" OfferFullValues="true" />
+        <button @onclick='() => Nav.NavigateTo("conversations")'>Back to list</button>
+    </div>
 </div>
+
+@if (_flags.GetValueOrDefault("") is { } convFlag)
+{
+    <div class="banner info flag-banner"><span aria-hidden="true">⚑</span> <strong>You flagged this conversation.</strong> @convFlag.Note</div>
+}
+
+@if (_findings.GetValueOrDefault(FindingSource.Sensitive) is > 0 and var sensitive)
+{
+    <div class="banner medium">
+        The sensitive data check found @Fmt.Plural(sensitive, "possible item", "possible items") in this conversation.
+        <a href="@($"sensitive?conversation={Id}")">See what was found</a>
+        @if (_findings.GetValueOrDefault(FindingSource.Watchlist) is > 0 and var hits) { <span> · @Fmt.Plural(hits, "watchlist match", "watchlist matches")</span> }
+    </div>
+}
+else if (_findings.GetValueOrDefault(FindingSource.Watchlist) is > 0 and var hitsOnly)
+{
+    <div class="banner info">@Fmt.Plural(hitsOnly, "watchlist match", "watchlist matches") in this conversation. <a href="watchlists">See the watchlists</a></div>
+}
 
 @if (_d.Flags.Count > 0 && (Expert || _d.Flags.Any(f => f.Severity >= Severity.Medium)))
 {
@@ -70,7 +92,12 @@ else
             var (index, count) = SiblingPosition(row.Uuid);
             <MessageCard Content="@ContentOf(row)" UserName="@_d.Header.UserName" Expert="Expert"
                          OffBranch="@(_showAll && Expert && !_onPath.Contains(row.Uuid))"
-                         SiblingIndex="index" SiblingCount="count" Switch="@(step => SwitchBranch(row.Uuid, step))" />
+                         SiblingIndex="index" SiblingCount="count" Switch="@(step => SwitchBranch(row.Uuid, step))"
+                         Flag="@_flags.GetValueOrDefault(row.Uuid)">
+                <HeadExtra>
+                    <FlagButton ConversationUuid="@Id" MessageUuid="@row.Uuid" Flag="@_flags.GetValueOrDefault(row.Uuid)" Compact="true" OnChanged="LoadFlags" />
+                </HeadExtra>
+            </MessageCard>
         }
     </div>
 }
@@ -90,6 +117,8 @@ else
     private int _tab;
     private string? _scrollTo;
     private string? _loadedId;
+    private Dictionary<string, ReviewFlag> _flags = new();
+    private IReadOnlyDictionary<string, int> _findings = new Dictionary<string, int>();
 
     private IEnumerable<MessageRow> Visible =>
         _showAll && Expert ? _d!.Messages.OrderBy(m => m.CreatedAt, StringComparer.Ordinal).ThenBy(m => m.Seq) : _path.Select(n => _rows[n.Uuid]);
@@ -110,6 +139,21 @@ else
         _tree = MessageTree.Build(_d.Messages.Select(m => new TreeNode(m.Uuid, m.ParentUuid, m.CreatedAt, m.Seq)));
         if (MessageParam is { } m && _rows.ContainsKey(m)) ChooseBranchContaining(m);
         Recompute();
+        LoadFlags();
+        _findings = Session.Audit.CountForConversation(Id);
+    }
+
+    /// <summary>Flags for this conversation, keyed by message ID ("" for the conversation itself).</summary>
+    private void LoadFlags()
+    {
+        if (!Session.IsReady) return;
+        _flags = Session.Reviews.ForConversation(Id).ToDictionary(f => f.MessageUuid ?? "", StringComparer.Ordinal);
+    }
+
+    private Report BuildReport(bool mask)
+    {
+        var shown = Visible.ToList();
+        return ReportBuilder.Conversation(Session.ReportContext(), _d!, shown, _flags.Values.ToList(), allVersions: _showAll && Expert, mask);
     }
 
     private void Recompute()

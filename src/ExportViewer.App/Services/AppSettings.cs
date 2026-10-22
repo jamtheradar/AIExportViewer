@@ -1,10 +1,13 @@
 using System.Text.Json;
+using ExportViewer.Core.Audit;
 
 namespace ExportViewer.App.Services;
 
 public enum ViewMode { Basic, Expert }
 
-public sealed record RecentLibrary(string Path, DateTimeOffset LastOpened);
+/// <param name="Path">The library folder, or for zip files the folder they are in.</param>
+/// <param name="Zips">The zip (and manifest) files when the library was opened from zips; null for an unzipped folder.</param>
+public sealed record RecentLibrary(string Path, DateTimeOffset LastOpened, List<string>? Zips = null);
 
 public sealed class SettingsData
 {
@@ -12,6 +15,7 @@ public sealed class SettingsData
     public bool MemoryOnly { get; set; }
     public bool LoggingEnabled { get; set; }
     public List<RecentLibrary> Recent { get; set; } = [];
+    public List<Watchlist> Watchlists { get; set; } = [];
 }
 
 /// <summary>
@@ -26,6 +30,13 @@ public sealed class AppSettings
     public string DataFolder { get; }
     public string LibrariesFolder => Path.Combine(DataFolder, "libraries");
     public string LogsFolder => Path.Combine(DataFolder, "logs");
+    public string ReviewsFolder => Path.Combine(DataFolder, "reviews");
+
+    /// <summary>Working copies of zip files while they are open. Removed on close and at the next start.</summary>
+    public string UnzippedFolder => Path.Combine(DataFolder, "unzipped");
+
+    /// <summary>Reports waiting to be handed to the Mac "save" dialog. Removed straight after.</summary>
+    public string ExportsTempFolder => Path.Combine(DataFolder, "exports-temp");
     private string SettingsFile => Path.Combine(DataFolder, "settings.json");
 
     public SettingsData Data { get; private set; }
@@ -66,21 +77,31 @@ public sealed class AppSettings
         Save();
     }
 
-    public void TouchRecent(string path)
+    public void TouchRecent(string path, IReadOnlyList<string>? zips = null)
     {
         Update(d =>
         {
-            d.Recent.RemoveAll(r => string.Equals(r.Path, path, StringComparison.OrdinalIgnoreCase));
-            d.Recent.Insert(0, new RecentLibrary(path, DateTimeOffset.Now));
+            d.Recent.RemoveAll(r => zips is null
+                ? r.Zips is null && string.Equals(r.Path, path, StringComparison.OrdinalIgnoreCase)
+                : r.Zips is not null && r.Zips.SequenceEqual(zips, StringComparer.OrdinalIgnoreCase));
+            d.Recent.Insert(0, new RecentLibrary(path, DateTimeOffset.Now, zips?.ToList()));
             if (d.Recent.Count > 10) d.Recent.RemoveRange(10, d.Recent.Count - 10);
         });
     }
 
     /// <summary>Database file for a library folder. The name is a hash so the folder path itself is not exposed in file names.</summary>
-    public string DatabasePathFor(string libraryRoot)
-    {
-        var key = Path.GetFullPath(libraryRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).ToLowerInvariant();
-        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(key)))[..16].ToLowerInvariant();
-        return Path.Combine(LibrariesFolder, $"library-{hash}.db");
-    }
+    public string DatabasePathFor(string libraryRoot) => Path.Combine(LibrariesFolder, $"library-{KeyFor(libraryRoot)}.db");
+
+    /// <summary>The reviewer's flags and notes for a library, kept apart from the library copy so a rebuild never loses them.</summary>
+    public string ReviewPathFor(string libraryRoot) => Path.Combine(ReviewsFolder, $"review-{KeyFor(libraryRoot)}.db");
+
+    /// <summary>Working folder for a set of zip files. The same zips always get the same folder, so reopening them is quick.</summary>
+    public string UnzipFolderFor(IEnumerable<string> sources) =>
+        Path.Combine(UnzippedFolder, Hash(string.Join('\n', sources.Select(s => Path.GetFullPath(s).ToLowerInvariant()).Order(StringComparer.Ordinal))));
+
+    private static string KeyFor(string libraryRoot) =>
+        Hash(Path.GetFullPath(libraryRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).ToLowerInvariant());
+
+    private static string Hash(string s) =>
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(s)))[..16].ToLowerInvariant();
 }

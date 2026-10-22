@@ -31,9 +31,29 @@ public class PrivacyGuardTests
                 yield return [dll];
     }
 
+    /// <summary>Third-party PDF assemblies shipped with the app (see Directory.Build.targets for the ones left out).</summary>
+    public static IEnumerable<object[]> PdfAssemblies() =>
+        Directory.EnumerateFiles(AppContext.BaseDirectory, "*.dll")
+            .Where(p => Path.GetFileName(p).StartsWith("PdfSharp", StringComparison.Ordinal) || Path.GetFileName(p).StartsWith("MigraDoc", StringComparison.Ordinal))
+            .Select(p => new object[] { p });
+
     [Theory]
     [MemberData(nameof(Assemblies))]
-    public void Assembly_does_not_reference_network_types(string path)
+    [MemberData(nameof(PdfAssemblies))]
+    public void Assembly_does_not_reference_network_types(string path) => AssertNoNetworkTypes(path);
+
+    [Fact]
+    public void Network_capable_pdf_helper_assemblies_are_left_out_of_the_build()
+    {
+        Assert.NotEmpty(PdfAssemblies());
+        foreach (var name in new[] { "PdfSharp.Cryptography.dll", "PdfSharp.Quality.dll", "PdfSharp.Snippets.dll" })
+            Assert.False(File.Exists(Path.Combine(AppContext.BaseDirectory, name)), $"{name} must not be copied to the output (it uses HttpClient)");
+        var appBin = Path.Combine(RepoRoot(), "src", "ExportViewer.App", "bin");
+        if (Directory.Exists(appBin))
+            Assert.Empty(Directory.EnumerateFiles(appBin, "PdfSharp.Cryptography.dll", SearchOption.AllDirectories));
+    }
+
+    private static void AssertNoNetworkTypes(string path)
     {
         using var fs = File.OpenRead(path);
         using var pe = new PEReader(fs);

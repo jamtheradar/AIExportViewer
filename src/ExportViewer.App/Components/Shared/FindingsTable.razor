@@ -1,0 +1,106 @@
+@inject LibrarySession Session
+
+@if (Rows.Count == 0)
+{
+    <div class="empty">@EmptyText</div>
+}
+else
+{
+    @if (!Watchlist)
+    {
+        <div style="display:flex;justify-content:flex-end;margin-bottom:.4rem">
+            @if (_revealed.Count > 0) { <button class="link small" @onclick="() => _revealed.Clear()">Hide all values again</button> }
+            else if (Expert) { <button class="link small" @onclick="RevealPage">Show every value on this page</button> }
+        </div>
+    }
+    <div class="table-wrap">
+        <table class="data findings">
+            <thead>
+                <tr>
+                    <th>@(Watchlist ? "Watchlist" : "Type")</th>
+                    <th>@(Watchlist ? "Matched" : "Value")</th>
+                    <th>In context</th>
+                    <th>Where</th>
+                    <th>Person</th>
+                    <th>Date</th>
+                    @if (Expert) { <th>Rule</th> }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in Rows)
+                {
+                    var value = Watchlist ? r.Masked : _revealed.GetValueOrDefault(r.Id);
+                    <tr>
+                        <td class="nowrap">
+                            @(Watchlist ? r.Type : AuditLabels.Type(r.Type))
+                            @if (!Watchlist && r.Confidence < Confidence.High) { <div class="small muted" title="How closely it matches the usual pattern">@AuditLabels.Confidence(r.Confidence)</div> }
+                        </td>
+                        <td class="nowrap">
+                            <span class="mono small">@(value ?? r.Masked)</span>
+                            @if (!Watchlist)
+                            {
+                                @if (value is null) { <button class="link small reveal" @onclick="() => Reveal(r.Id)" title="Show the full value">Show</button> }
+                                else { <button class="link small reveal" @onclick="() => _revealed.Remove(r.Id)">Hide</button> }
+                            }
+                        </td>
+                        <td class="context small">
+                            @if (r.ContextBefore.Length + r.ContextAfter.Length > 0)
+                            {
+                                <span>@r.ContextBefore</span><mark>@(value ?? r.Masked)</mark><span>@r.ContextAfter</span>
+                            }
+                            else
+                            {
+                                <span class="muted">@(r.Location == FindingLocation.UserDetails ? "Phone number in the user list" : r.Location == FindingLocation.SignIn ? "Address used to sign in" : "")</span>
+                            }
+                        </td>
+                        <td>
+                            <div class="small muted">@AuditLabels.Location(r.Location)</div>
+                            @if (Link(r) is { } href) { <a href="@href">@r.Title</a> } else { <span>@r.Title</span> }
+                        </td>
+                        <td class="nowrap">@(r.UserName ?? "")</td>
+                        <td class="nowrap small">@Fmt.Date(r.Timestamp, Expert ? ViewMode.Expert : ViewMode.Basic)</td>
+                        @if (Expert) { <td class="mono small">@r.Detector</td> }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<FindingRow> Rows { get; set; } = [];
+    [Parameter] public bool Watchlist { get; set; }
+    [Parameter] public bool Expert { get; set; }
+    [Parameter] public string EmptyText { get; set; } = "Nothing found.";
+
+    private readonly Dictionary<long, string> _revealed = new();
+
+    protected override void OnParametersSet()
+    {
+        // A new page of results starts masked again.
+        var ids = Rows.Select(r => r.Id).ToHashSet();
+        foreach (var id in _revealed.Keys.Where(k => !ids.Contains(k)).ToList()) _revealed.Remove(id);
+    }
+
+    private void Reveal(long id)
+    {
+        if (Session.IsReady && Session.Audit.Reveal(id) is { } v) _revealed[id] = v;
+    }
+
+    private void RevealPage()
+    {
+        foreach (var r in Rows) Reveal(r.Id);
+    }
+
+    internal static string? Link(FindingRow r) => r.Location switch
+    {
+        SearchKind.Message or SearchKind.Tool or SearchKind.Attachment when r.ConversationUuid is not null =>
+            $"conversations/{r.ConversationUuid}?m={Uri.EscapeDataString(r.RefId ?? "")}",
+        SearchKind.Conversation when r.ConversationUuid is not null => $"conversations/{r.ConversationUuid}",
+        SearchKind.Project or SearchKind.ProjectDoc when r.TargetId is not null => $"projects/{r.TargetId}",
+        SearchKind.Memory when r.TargetId is not null => $"memories/{r.TargetId}",
+        SearchKind.Artifact when r.TargetId is not null => $"artifacts/{r.TargetId}",
+        FindingLocation.UserDetails or FindingLocation.SignIn when r.TargetId is not null => $"users/{r.TargetId}",
+        _ => null,
+    };
+}

@@ -1,4 +1,4 @@
-﻿@implements IDisposable
+@implements IDisposable
 @inject LibrarySession Session
 @inject ViewModeService View
 
@@ -19,6 +19,10 @@
     }
     <NavLink href="search" class="@Disabled">Search</NavLink>
     <NavLink href="library" class="@Disabled">Files loaded</NavLink>
+    <div class="section">Audit</div>
+    <NavLink href="sensitive" class="@Disabled">Sensitive data</NavLink>
+    <NavLink href="watchlists" class="@Disabled">Watchlists</NavLink>
+    <NavLink href="flags" class="@Disabled">Flags and notes</NavLink>
     <div class="spacer"></div>
     <NavLink href="settings">Settings</NavLink>
 </nav>

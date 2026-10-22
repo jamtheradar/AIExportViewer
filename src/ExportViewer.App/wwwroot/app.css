@@ -26,6 +26,8 @@
     --status-good: #0ca30c;
     --human-bg: #eef4fb;
     --code-bg: #f3f2ef;
+    --flag: #a85f00;
+    --flag-bg: #fff4d6;
     --shadow: 0 1px 2px rgba(0, 0, 0, .06), 0 1px 1px rgba(0, 0, 0, .04);
     --radius: 8px;
     --font: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
@@ -54,6 +56,8 @@
         --mark: #5c4d00;
         --human-bg: #1d2834;
         --code-bg: #232322;
+        --flag: #f2b45a;
+        --flag-bg: #3a2c12;
         --shadow: none;
     }
 }
@@ -173,7 +177,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     outline-offset: 2px;
 }
 
-input[type=text], input[type=search], input[type=date], select {
+input[type=text], input[type=search], input[type=date], select, textarea {
     font: inherit;
     padding: .38rem .6rem;
     border: 1px solid var(--border);
@@ -396,3 +400,32 @@ iframe.preview { width: 100%; height: 640px; border: 1px solid var(--border); bo
     .split { grid-template-columns: 1fr; }
     .topbar input[type=search] { width: 160px; }
 }
+
+/* ---- Phase 2: audit ---- */
+
+.head-actions { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+.export-buttons { display: inline-flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+.export-buttons label.check { display: inline-flex; gap: .3rem; align-items: center; color: var(--text-2); }
+.error-text { color: var(--status-critical); }
+.warn-text { color: var(--text-2); border-left: 3px solid var(--status-serious); padding-left: .5rem; margin: .35rem 0; }
+textarea { resize: vertical; line-height: 1.45; }
+
+.flag-button { color: var(--text-2); }
+.flag-button.on { color: var(--flag); border-color: var(--flag); background: var(--flag-bg); font-weight: 600; }
+.flag-button.compact { padding: 0 .45rem; line-height: 1.5; font-size: .85rem; }
+.flag-button.compact:not(.on) { border-color: transparent; background: none; opacity: .55; }
+.msg:hover .flag-button.compact, .flag-button.compact:focus-visible { opacity: 1; }
+.msg.flagged { border-left: 4px solid var(--flag); }
+.flag-note { background: var(--flag-bg); border-radius: 6px; padding: .35rem .6rem; margin: 0 0 .5rem; font-size: .88rem; white-space: pre-wrap; }
+.flag-banner { border-left-color: var(--flag); white-space: pre-wrap; }
+.flag-mark { color: var(--flag); margin-left: .35rem; }
+.note-cell { white-space: pre-wrap; min-width: 220px; max-width: 360px; }
+
+.scan-panel { margin-bottom: .5rem; }
+button.tile { text-align: left; cursor: pointer; font: inherit; color: inherit; }
+button.tile:hover { border-color: var(--accent); }
+button.tile.selected { border-color: var(--accent); background: var(--accent-weak); }
+table.findings td.context { min-width: 280px; max-width: 520px; overflow-wrap: anywhere; color: var(--text-2); }
+table.findings td.context mark { color: var(--text); font-family: var(--mono); font-size: .85em; }
+.reveal { margin-left: .4rem; }
+.editor { border-top: 1px solid var(--border); margin-top: 1rem; padding-top: .4rem; }

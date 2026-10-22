@@ -14,10 +14,10 @@
             <div class="library">
                 @if (Session.Root is { } root)
                 {
-                    <span>Library: <strong>@Path.GetFileName(root.TrimEnd('\\', '/'))</strong></span>
+                    <span>Library: <strong>@Session.DisplayName</strong></span>
                     @if (View.IsExpert)
                     {
-                        <span class="muted small"> — @root</span>
+                        <span class="muted small"> — @(Session.ZipSources is { } zips ? $"unzipped from {string.Join(", ", zips.Select(Path.GetFileName))}" : root)</span>
                     }
                 }
                 else

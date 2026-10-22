@@ -1,0 +1,65 @@
+@inject LibrarySession Session
+
+<button class="flag-button @(Flag is null ? "" : "on") @(Compact ? "compact" : "")" @onclick="Open"
+        title="@(Flag is null ? $"Flag this {What} for follow-up" : $"Flagged{(Flag.Note.Length > 0 ? ": " + Flag.Note : "")}. Click to change.")"
+        aria-label="@(Flag is null ? $"Flag this {What}" : $"Change the flag on this {What}")">
+    <span aria-hidden="true">⚑</span>@if (!Compact) { <span>@(Flag is null ? " Flag" : " Flagged")</span> }
+</button>
+
+@if (_editing)
+{
+    <div class="overlay" role="dialog" aria-modal="true" aria-labelledby="flag-title-@_id">
+        <div class="dialog">
+            <h2 id="flag-title-@_id">@(Flag is null ? $"Flag this {What}" : $"Flagged {What}")</h2>
+            <p class="subtle">Flags and notes are kept on this computer only, with this export. They are not added to the export files.</p>
+            <label class="small" for="flag-note-@_id">Note (optional)</label>
+            <textarea id="flag-note-@_id" rows="4" style="width:100%" @bind="_note" placeholder="Why this needs a look, what to follow up…"></textarea>
+            @if (Session.Reviews.InMemory)
+            {
+                <p class="small muted">“Don't save a copy” is on in Settings, so this flag will be forgotten when the export is closed.</p>
+            }
+            <div class="actions">
+                @if (Flag is not null) { <button class="danger" @onclick="RemoveAsync" style="margin-right:auto">Remove flag</button> }
+                <button @onclick="() => _editing = false">Cancel</button>
+                <button class="primary" @onclick="SaveAsync">@(Flag is null ? "Flag" : "Save note")</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public string ConversationUuid { get; set; } = "";
+
+    /// <summary>Null to flag the whole conversation.</summary>
+    [Parameter] public string? MessageUuid { get; set; }
+
+    [Parameter] public ReviewFlag? Flag { get; set; }
+    [Parameter] public bool Compact { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private readonly string _id = Guid.NewGuid().ToString("N")[..8];
+    private bool _editing;
+    private string _note = "";
+
+    private string What => MessageUuid is null ? "conversation" : "message";
+
+    private void Open()
+    {
+        _note = Flag?.Note ?? "";
+        _editing = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        Session.Reviews.Set(ConversationUuid, MessageUuid, _note);
+        _editing = false;
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task RemoveAsync()
+    {
+        Session.Reviews.Remove(ConversationUuid, MessageUuid);
+        _editing = false;
+        await OnChanged.InvokeAsync();
+    }
+}

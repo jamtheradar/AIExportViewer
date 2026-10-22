@@ -6,23 +6,33 @@
 <div class="page-head">
     <div>
         <h1>Review your organisation's Claude export</h1>
-        <p class="subtle">Open the folder where you unzipped the export. Everything stays on this computer; the app never connects to the internet.</p>
+        <p class="subtle">Open the export as an unzipped folder or as the zip files you downloaded. Everything stays on this computer; the app never connects to the internet.</p>
     </div>
 </div>
 
 @if (Session.State == SessionState.Failed && Session.Error is { } error)
 {
-    <div class="banner high" role="alert"><strong>That folder could not be opened.</strong> @error</div>
+    <div class="banner high" role="alert"><strong>The export could not be opened.</strong> @error</div>
 }
 
 @if (Session.IsReady && Session.Root is { } root)
 {
     <div class="card">
         <h2 style="margin-top:0">Open now</h2>
-        <p class="mono small">@root</p>
-        @if (Session.LastSummary is { } s && s.Files.Sum(f => f.Records) == 0 && s.ZipFiles > 0)
+        <p class="mono small">@(Session.ZipSources is { } zips ? string.Join(", ", zips.Select(Path.GetFileName)) : root)</p>
+        @if (Session.UnzipProblems.Count > 0)
         {
-            <div class="banner medium">This folder contains @Fmt.Plural(s.ZipFiles, "zip file", "zip files") but no unzipped export data. Unzip them into this folder first, then open it again.</div>
+            <div class="banner medium">
+                <strong>Some of the zip files had problems.</strong> Everything else was opened.
+                <ul>@foreach (var p in Session.UnzipProblems) { <li>@p</li> }</ul>
+            </div>
+        }
+        @if (_folderZips.Count > 0)
+        {
+            <div class="banner medium">
+                This folder contains @Fmt.Plural(_folderZips.Count(z => z.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)), "export zip file", "export zip files") but no unzipped export data.
+                <div style="margin-top:.5rem"><button class="primary" @onclick="() => OpenZipsAsync(_folderZips)" disabled="@_busy">Open the zip files in this folder</button></div>
+            </div>
         }
         <div style="display:flex;gap:.5rem;margin-top:.6rem">
             <button class="primary" @onclick='() => Nav.NavigateTo("overview")'>Go to the overview</button>
@@ -41,6 +51,11 @@
         <button @onclick="() => OpenAsync(_path)" disabled="@(_busy || string.IsNullOrWhiteSpace(_path))">Open</button>
     </div>
     <p class="small muted" style="margin-top:.6rem">Shortcut: Ctrl+O (⌘O on Mac). The export files are only read, never changed.</p>
+
+    <h3>Or open the zip files</h3>
+    <p>Choose all the zip files from one export (such as <span class="mono">conversations-000.zip</span>), and the manifest file if you have it.
+        They are unzipped into the app's own folder while you review them, and removed again when you close the export.</p>
+    <button @onclick="PickZipsAsync" disabled="@_busy">Choose zip files…</button>
 </div>
 
 @if (Settings.Data.Recent.Count > 0)
@@ -49,15 +64,25 @@
         <h2 style="margin-top:0">Recently opened</h2>
         <div class="table-wrap">
             <table class="data">
-                <thead><tr><th>Folder</th><th>Last opened</th><th></th></tr></thead>
+                <thead><tr><th>Export</th><th>Last opened</th><th></th></tr></thead>
                 <tbody>
                     @foreach (var r in Settings.Data.Recent)
                     {
                         <tr>
-                            <td class="mono small">@r.Path</td>
+                            <td class="mono small">
+                                @if (r.Zips is { } zips)
+                                {
+                                    <span>@Fmt.Plural(zips.Count, "file", "files") in @r.Path</span>
+                                    <div class="muted">@string.Join(", ", zips.Select(Path.GetFileName))</div>
+                                }
+                                else
+                                {
+                                    @r.Path
+                                }
+                            </td>
                             <td class="nowrap">@r.LastOpened.ToLocalTime().ToString("d MMM yyyy, h:mm tt")</td>
                             <td class="num">
-                                <button @onclick="() => OpenAsync(r.Path)" disabled="@_busy">Open</button>
+                                <button @onclick="() => OpenRecentAsync(r)" disabled="@_busy">Open</button>
                                 <button class="link" style="margin-left:.6rem" @onclick="() => Forget(r)">Remove from list</button>
                             </td>
                         </tr>
@@ -65,13 +90,14 @@
                 </tbody>
             </table>
         </div>
-        <p class="small muted">Only folder locations are remembered here, not any content.</p>
+        <p class="small muted">Only file and folder locations are remembered here, not any content.</p>
     </div>
 }
 
 @code {
     private string _path = "";
     private bool _busy;
+    private IReadOnlyList<string> _folderZips = [];
 
     private async Task PickAsync()
     {
@@ -79,19 +105,45 @@
         if (path is not null) await OpenAsync(path);
     }
 
+    private async Task PickZipsAsync()
+    {
+        var files = await Picker.PickZipsAsync();
+        if (files is not null) await OpenZipsAsync(files);
+    }
+
     private async Task OnKey(KeyboardEventArgs e)
     {
         if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_path)) await OpenAsync(_path);
     }
 
+    private Task OpenRecentAsync(RecentLibrary r) => r.Zips is { } zips ? OpenZipsAsync(zips) : OpenAsync(r.Path);
+
     private async Task OpenAsync(string path)
     {
         _busy = true;
+        _folderZips = [];
         try
         {
             await Session.OpenAsync(path.Trim().Trim('"'));
-            if (Session.IsReady && !(Session.LastSummary is { } s && s.Files.Sum(f => f.Records) == 0 && s.ZipFiles > 0))
-                Nav.NavigateTo("overview");
+            // A folder of downloaded zips (often with the manifest beside them) holds no export data until unzipped.
+            if (Session.IsReady && Session.Root is { } root && Session.Queries.GetOverview() is { Users: 0, Conversations: 0, Projects: 0, Memories: 0, Artifacts: 0 })
+                _folderZips = await Task.Run(() => ExportViewer.Core.Sources.ZipExtractor.FindExportFiles(root));
+            if (Session.IsReady && _folderZips.Count == 0) Nav.NavigateTo("overview");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OpenZipsAsync(IReadOnlyList<string> files)
+    {
+        _busy = true;
+        _folderZips = [];
+        try
+        {
+            await Session.OpenZipsAsync(files);
+            if (Session.IsReady && Session.UnzipProblems.Count == 0) Nav.NavigateTo("overview");
         }
         finally
         {
