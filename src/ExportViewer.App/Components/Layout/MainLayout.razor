@@ -1,0 +1,90 @@
+﻿@inherits LayoutComponentBase
+@implements IDisposable
+@inject LibrarySession Session
+@inject ViewModeService View
+@inject ExternalLinks Links
+@inject FolderPicker Picker
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<div class="shell">
+    <NavMenu />
+    <div class="main">
+        <header class="topbar">
+            <div class="library">
+                @if (Session.Root is { } root)
+                {
+                    <span>Library: <strong>@Path.GetFileName(root.TrimEnd('\\', '/'))</strong></span>
+                    @if (View.IsExpert)
+                    {
+                        <span class="muted small"> — @root</span>
+                    }
+                }
+                else
+                {
+                    <span class="muted">No export open</span>
+                }
+            </div>
+            <input id="global-search" type="search" placeholder="Search everything (Ctrl+F)" aria-label="Search everything"
+                   @bind="_query" @bind:event="oninput" @onkeydown="OnSearchKey" disabled="@(!Session.IsReady)" />
+            <div class="segmented" role="group" aria-label="View">
+                <button class="@(View.IsExpert ? "" : "on")" @onclick="() => View.Set(ViewMode.Basic)" title="Show what a reviewer needs">Basic</button>
+                <button class="@(View.IsExpert ? "on" : "")" @onclick="() => View.Set(ViewMode.Expert)" title="Show every field in the export">Expert</button>
+            </div>
+            <span class="offline" title="This app never connects to the internet. Everything stays on this computer.">Offline</span>
+        </header>
+        <div class="main-scroll">
+            <div class="page">
+                @Body
+            </div>
+        </div>
+    </div>
+</div>
+
+<LoadOverlay />
+<LinkDialog />
+
+@code {
+    private string _query = "";
+    private DotNetObjectReference<ExternalLinks>? _linksRef;
+    private DotNetObjectReference<MainLayout>? _selfRef;
+
+    protected override void OnInitialized()
+    {
+        Session.Changed += OnChanged;
+        View.Changed += OnChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _linksRef = DotNetObjectReference.Create(Links);
+        _selfRef = DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync("aiev.init", _linksRef, _selfRef);
+    }
+
+    private void OnSearchKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_query))
+            Nav.NavigateTo("/search?q=" + Uri.EscapeDataString(_query.Trim()));
+    }
+
+    [JSInvokable]
+    public async Task OpenLibraryShortcut()
+    {
+        var path = await Picker.PickAsync();
+        if (path is null) return;
+        await Session.OpenAsync(path);
+        Nav.NavigateTo(Session.IsReady ? "/overview" : "/");
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Session.Changed -= OnChanged;
+        View.Changed -= OnChanged;
+        _linksRef?.Dispose();
+        _selfRef?.Dispose();
+    }
+}

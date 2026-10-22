@@ -1,0 +1,112 @@
+@page "/library"
+@inherits PageBase
+
+<div class="page-head">
+    <div>
+        <h1>Files loaded</h1>
+        <p class="subtle">What the app found in the folder, and anything it could not read.</p>
+    </div>
+    @if (Session.IsReady)
+    {
+        <button @onclick="Rescan">Check the folder for new files</button>
+    }
+</div>
+
+@if (Session.LastSummary is { } s)
+{
+    <div class="banner info">
+        Last load read @Fmt.Plural(s.Files.Count, "file", "files") (@Fmt.Plural(s.Files.Sum(f => f.Records), "record", "records")) in @s.Elapsed.TotalSeconds.ToString("F1") seconds@(s.Rebuilt ? ", rebuilding everything" : "").
+        @if (s.ZipFiles > 0) { <span> The folder also contains @Fmt.Plural(s.ZipFiles, "zip file", "zip files"), which are not read. Unzip them first if they hold data you need.</span> }
+    </div>
+}
+
+@if (_issues.Count > 0)
+{
+    <h2>Problems found (@_issues.Count)</h2>
+    <div class="table-wrap">
+        <table class="data">
+            <thead><tr><th>File</th><th>What happened</th></tr></thead>
+            <tbody>
+                @foreach (var i in _issues)
+                {
+                    <tr><td class="mono small">@(i.Path ?? "—")</td><td>@i.Message</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+else if (Session.IsReady)
+{
+    <p>Every file was read without problems.</p>
+}
+
+<h2>By type</h2>
+<div class="table-wrap">
+    <table class="data">
+        <thead><tr><th>Type</th><th class="num">Files</th><th class="num">Records</th><th class="num">Skipped records</th><th class="num">Size</th></tr></thead>
+        <tbody>
+            @foreach (var g in _files.GroupBy(f => f.Kind).OrderBy(g => g.Key))
+            {
+                <tr>
+                    <td>@KindLabel(g.Key)</td>
+                    <td class="num">@g.Count()</td>
+                    <td class="num">@Fmt.N(g.Sum(f => f.Records))</td>
+                    <td class="num">@Fmt.N(g.Sum(f => f.Skipped))</td>
+                    <td class="num">@Fmt.Bytes(g.Sum(f => f.Size))</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (Expert)
+{
+    <h2>Every file</h2>
+    <div class="table-wrap">
+        <table class="data">
+            <thead><tr><th>Path</th><th>Type</th><th class="num">Records</th><th class="num">Skipped</th><th class="num">Size</th><th>Status</th></tr></thead>
+            <tbody>
+                @foreach (var f in _files)
+                {
+                    <tr>
+                        <td class="mono small">@f.Path</td>
+                        <td>@KindLabel(f.Kind)@(f.Collection is null ? "" : $" ({f.Collection})")</td>
+                        <td class="num">@Fmt.N(f.Records)</td>
+                        <td class="num">@Fmt.N(f.Skipped)</td>
+                        <td class="num">@Fmt.Bytes(f.Size)</td>
+                        <td>@f.Status @if (f.Note is not null) { <div class="small muted">@f.Note</div> }</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<SourceFileRow> _files = [];
+    private IReadOnlyList<LoadIssueRow> _issues = [];
+
+    protected override void LoadData()
+    {
+        _files = Session.Queries.GetSourceFiles();
+        _issues = Session.Queries.GetLoadIssues();
+    }
+
+    private async Task Rescan()
+    {
+        if (Session.Root is { } root) await Session.OpenAsync(root);
+    }
+
+    private static string KindLabel(string kind) => kind switch
+    {
+        "Conversations" => "Conversations",
+        "Users" => "People",
+        "Logins" => "Sign-in history",
+        "Project" => "Projects",
+        "Memory" => "Memories",
+        "Artifact" => "Artifacts & pages",
+        "Manifest" => "Export manifest",
+        "Generic" => "Other data",
+        _ => kind,
+    };
+}

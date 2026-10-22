@@ -1,0 +1,30 @@
+@implements IDisposable
+@* Every field of a stored record, straight from the export's JSON, including fields this app does not know about. *@
+@if (_doc is not null)
+{
+    <div class="json-tree"><ul><JsonNode Element="_doc.RootElement" Depth="0" /></ul></div>
+}
+else if (Raw is not null)
+{
+    <pre class="raw">@Raw</pre>
+}
+
+@code {
+    [Parameter] public string? Raw { get; set; }
+
+    private JsonDocument? _doc;
+    private string? _parsed;
+
+    protected override void OnParametersSet()
+    {
+        if (Raw == _parsed) return;
+        _doc?.Dispose();
+        _doc = null;
+        _parsed = Raw;
+        if (Raw is null) return;
+        try { _doc = JsonDocument.Parse(Raw); }
+        catch (JsonException) { _doc = null; }
+    }
+
+    public void Dispose() => _doc?.Dispose();
+}

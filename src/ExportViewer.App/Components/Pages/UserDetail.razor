@@ -1,0 +1,127 @@
+@page "/users/{Id}"
+@inherits PageBase
+
+@if (_u is null)
+{
+    <div class="empty">@(Session.IsReady ? "This person is not in the export." : "Open an export first.")</div>
+    return;
+}
+
+<div class="page-head">
+    <div>
+        <h1>@_u.DisplayName</h1>
+        <p class="subtle">@_u.Email @if (!_u.InUserList) { <span class="tag">Not in the export's user list</span> }</p>
+    </div>
+    <button @onclick='() => Nav.NavigateTo("users")'>Back to users</button>
+</div>
+
+<div class="tiles">
+    <div class="tile"><div class="value">@Fmt.N(_u.Conversations)</div><div class="label">Conversations</div></div>
+    <div class="tile"><div class="value">@Fmt.N(_u.Messages)</div><div class="label">Messages (both sides)</div></div>
+    <div class="tile"><div class="value">@Fmt.Day(_u.FirstActivity)</div><div class="label">First activity</div></div>
+    <div class="tile"><div class="value">@Fmt.Day(_u.LastActivity)</div><div class="label">Last activity</div></div>
+    <div class="tile"><div class="value">@Fmt.N(_u.Logins)</div><div class="label">Sign-ins recorded</div></div>
+</div>
+
+<div class="tabs">
+    <button class="@(_tab == 0 ? "on" : "")" @onclick="() => _tab = 0">Conversations</button>
+    <button class="@(_tab == 1 ? "on" : "")" @onclick="() => _tab = 1">Activity</button>
+    <button class="@(_tab == 2 ? "on" : "")" @onclick="() => _tab = 2">Sign-ins</button>
+    <button class="@(_tab == 3 ? "on" : "")" @onclick="() => _tab = 3">Projects &amp; artifacts</button>
+    @if (Expert && _u.Raw is not null) { <button class="@(_tab == 4 ? "on" : "")" @onclick="() => _tab = 4">All fields</button> }
+</div>
+
+@switch (_tab)
+{
+    case 0:
+        <ConversationTable Items="_convs" ShowUser="false" Expert="Expert" />
+        <Pager Total="_convTotal" Offset="_offset" OffsetChanged="PageConvs" />
+        break;
+    case 1:
+        <div class="card">
+            <h2 style="margin-top:0">Messages sent</h2>
+            <ActivityChart Points="_points" By="_grain" AriaLabel="Messages sent by this person over time" />
+        </div>
+        break;
+    case 2:
+        @if (_logins.Count == 0)
+        {
+            <div class="empty">No sign-ins recorded for this person.</div>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>When</th><th>Browser or app</th><th>System</th><th>Device</th>@if (Expert) { <th>IP address</th><th>Method</th> }</tr></thead>
+                    <tbody>
+                        @foreach (var l in _logins)
+                        {
+                            <tr>
+                                <td class="nowrap">@When(l.Timestamp)</td>
+                                <td>@l.Browser</td>
+                                <td>@l.Os</td>
+                                <td>@l.Device</td>
+                                @if (Expert) { <td class="mono small">@l.Ip</td><td>@l.Method</td> }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (!Expert) { <p class="small muted">Switch to Expert view to see IP addresses.</p> }
+        }
+        break;
+    case 3:
+        <h2>Projects created</h2>
+        @if (_projects.Count == 0) { <p class="muted">None.</p> }
+        else
+        {
+            <ul>@foreach (var p in _projects) { <li><a href="@($"projects/{p.Uuid}")">@(string.IsNullOrWhiteSpace(p.Name) ? "(unnamed project)" : p.Name)</a> <span class="muted small">@Fmt.Day(p.UpdatedAt)</span></li> }</ul>
+        }
+        <h2>Artifacts and pages owned</h2>
+        @if (_artifacts.Count == 0) { <p class="muted">None.</p> }
+        else
+        {
+            <ul>@foreach (var a in _artifacts) { <li><a href="@($"artifacts/{a.Id}")">@(a.Title ?? "(untitled)")</a> <span class="muted small">@Fmt.Day(a.UpdatedAt)</span></li> }</ul>
+        }
+        @if (_hasMemory) { <p><a href="@($"memories/{Id}")">See what Claude remembers about this person</a></p> }
+        break;
+    default:
+        <ExpertDetails Raw="@_u.Raw" />
+        break;
+}
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    private UserSummary? _u;
+    private IReadOnlyList<ConversationListItem> _convs = [];
+    private int _convTotal, _offset, _tab;
+    private IReadOnlyList<LoginRow> _logins = [];
+    private IReadOnlyList<ActivityChart.Point> _points = [];
+    private ActivityChart.Grain _grain;
+    private List<ProjectSummary> _projects = [];
+    private List<ArtifactSummary> _artifacts = [];
+    private bool _hasMemory;
+
+    protected override void LoadData()
+    {
+        var q = Session.Queries;
+        _u = q.GetUser(Id);
+        if (_u is null) return;
+        _offset = 0;
+        LoadConvs();
+        _logins = q.GetLogins(Id);
+        (_points, _grain) = ActivityChart.Bucket(q.GetActivity().Where(a => a.AccountUuid == Id).Select(a => Fmt.Parse(a.CreatedAt)).OfType<DateTimeOffset>());
+        _projects = q.GetProjects().Where(p => p.CreatorUuid == Id).ToList();
+        _artifacts = q.GetArtifacts().Where(a => a.OwnerUuid == Id).ToList();
+        _hasMemory = q.GetMemoryPeople().Any(m => m.AccountUuid == Id);
+    }
+
+    private void LoadConvs() => (_convTotal, _convs) = Session.Queries.GetConversations(new ConversationFilter(AccountUuid: Id, Limit: 50, Offset: _offset));
+
+    private void PageConvs(int offset)
+    {
+        _offset = offset;
+        LoadConvs();
+    }
+}

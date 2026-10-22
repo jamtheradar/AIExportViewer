@@ -1,0 +1,94 @@
+@page "/other"
+@page "/other/{Collection}"
+@inherits PageBase
+
+<div class="page-head">
+    <div>
+        <h1>Other data</h1>
+        <p class="subtle">Files in the export that this app does not have a dedicated screen for yet. Every record can still be inspected here.</p>
+    </div>
+</div>
+
+@if (_collections.Count == 0)
+{
+    <div class="empty">Everything in this export has its own screen. There is no other data.</div>
+    return;
+}
+
+<div class="filters">
+    <label>Collection
+        <select value="@Collection" @onchange='e => Nav.NavigateTo($"other/{Uri.EscapeDataString(e.Value?.ToString() ?? "")}")'>
+            <option value="">Choose…</option>
+            @foreach (var c in _collections) { <option value="@c.Name">@c.Name (@Fmt.N(c.Records))</option> }
+        </select>
+    </label>
+    @if (Collection is not null)
+    {
+        <label>Contains <input type="search" @bind="_filter" @bind:event="oninput" @bind:after="Apply" placeholder="Any text" /></label>
+    }
+</div>
+
+@if (Collection is not null)
+{
+    <div class="split">
+        <div>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Record</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in _rows)
+                        {
+                            <tr class="clickable" @onclick="() => _selected = r">
+                                <td class="@(_selected?.Id == r.Id ? "mono" : "")">
+                                    @(r.Label ?? r.Key ?? $"Record {r.Id}")
+                                    @if (r.Label is not null && r.Key is not null) { <div class="mono small muted">@r.Key</div> }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <Pager Total="_total" Offset="_offset" PageSize="100" OffsetChanged="Page" />
+        </div>
+        <div>
+            @if (_selected is null) { <div class="empty">Choose a record to see its fields.</div> }
+            else { <ExpertDetails Raw="@_selected.Raw" /> }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string? Collection { get; set; }
+
+    private IReadOnlyList<CollectionInfo> _collections = [];
+    private IReadOnlyList<GenericRow> _rows = [];
+    private GenericRow? _selected;
+    private int _total, _offset;
+    private string _filter = "";
+
+    protected override void LoadData()
+    {
+        _collections = Session.Queries.GetCollections();
+        _offset = 0;
+        _selected = null;
+        Query();
+    }
+
+    private void Apply()
+    {
+        _offset = 0;
+        Query();
+    }
+
+    private void Page(int offset)
+    {
+        _offset = offset;
+        Query();
+    }
+
+    private void Query()
+    {
+        if (Collection is null) return;
+        (_total, _rows) = Session.Queries.GetGenericRecords(Collection, _filter, 100, _offset);
+    }
+}

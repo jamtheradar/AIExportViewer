@@ -1,0 +1,39 @@
+@page "/memories"
+@inherits PageBase
+
+<div class="page-head">
+    <div>
+        <h1>Memories</h1>
+        <p class="subtle">What Claude has saved about each person to use in later conversations.</p>
+    </div>
+</div>
+
+@if (_people.Count == 0)
+{
+    <div class="empty">No memories in this export.</div>
+}
+else
+{
+    <div class="table-wrap">
+        <table class="data">
+            <thead><tr><th>Person</th><th>Last updated</th><th class="num">Memory files</th>@if (Expert) { <th class="num">Snapshots</th><th>ID</th> }</tr></thead>
+            <tbody>
+                @foreach (var p in _people)
+                {
+                    <tr class="clickable" @onclick='() => Nav.NavigateTo($"memories/{p.AccountUuid}")'>
+                        <td><a href="@($"memories/{p.AccountUuid}")" @onclick:stopPropagation="true">@(p.UserName ?? "Unknown person")</a></td>
+                        <td class="nowrap">@When(p.LatestAt)</td>
+                        <td class="num">@p.Files</td>
+                        @if (Expert) { <td class="num">@p.Snapshots</td><td class="mono small">@p.AccountUuid</td> }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<MemoryPerson> _people = [];
+
+    protected override void LoadData() => _people = Session.Queries.GetMemoryPeople();
+}

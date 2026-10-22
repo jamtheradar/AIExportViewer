@@ -1,0 +1,56 @@
+@inject NavigationManager Nav
+
+@if (Items.Count == 0)
+{
+    <div class="empty">No conversations match.</div>
+}
+else
+{
+    <div class="table-wrap">
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>Conversation</th>
+                    @if (ShowUser) { <th>Person</th> }
+                    @if (Expert) { <th>Started</th> }
+                    <th>Last message</th>
+                    <th class="num">Messages</th>
+                    <th>Notes</th>
+                    @if (Expert) { <th>ID</th> }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var c in Items)
+                {
+                    <tr class="clickable" @onclick="@(() => Nav.NavigateTo($"conversations/{c.Uuid}"))">
+                        <td>
+                            <a href="@($"conversations/{c.Uuid}")" @onclick:stopPropagation="true">@c.Title</a>
+                        </td>
+                        @if (ShowUser) { <td class="nowrap">@(c.UserName ?? "Unknown person")</td> }
+                        @if (Expert) { <td class="nowrap small">@Fmt.Date(c.FirstMessageAt, ViewMode.Expert)</td> }
+                        <td class="nowrap @(Expert ? "small" : "")">@Fmt.Date(c.LastMessageAt, Expert ? ViewMode.Expert : ViewMode.Basic)</td>
+                        <td class="num">
+                            @Fmt.N(c.MessageCount)
+                            @if (Expert && c.TotalMessages != c.MessageCount) { <span class="muted small"> / @Fmt.N(c.TotalMessages)</span> }
+                        </td>
+                        <td>
+                            <div style="display:flex;gap:.3rem;flex-wrap:wrap">
+                                <StatusBadge Severity="c.Integrity" />
+                                @if (c.Traits.HasFlag(MessageTraits.HasAttachments) || c.Traits.HasFlag(MessageTraits.HasFiles)) { <span class="tag">Files</span> }
+                                @if (c.Traits.HasFlag(MessageTraits.HasToolUse)) { <span class="tag">Tools</span> }
+                                @if (c.ForkCount > 0) { <span class="tag" title="Messages were edited or replies retried">Edited</span> }
+                            </div>
+                        </td>
+                        @if (Expert) { <td class="mono small">@c.Uuid[..Math.Min(8, c.Uuid.Length)]</td> }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<ConversationListItem> Items { get; set; } = [];
+    [Parameter] public bool ShowUser { get; set; } = true;
+    [Parameter] public bool Expert { get; set; }
+}

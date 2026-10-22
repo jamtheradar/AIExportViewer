@@ -1,0 +1,9 @@
+@if (Severity > Severity.None)
+{
+    <span class="status @Fmt.SeverityClass(Severity)" title="@Title">@Fmt.SeverityLabel(Severity)</span>
+}
+
+@code {
+    [Parameter] public Severity Severity { get; set; }
+    [Parameter] public string? Title { get; set; }
+}

@@ -1,0 +1,166 @@
+@page "/search"
+@inherits PageBase
+
+<div class="page-head">
+    <div>
+        <h1>Search</h1>
+        <p class="subtle">Search every conversation, attachment, project document, memory and page in the export.</p>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom:1rem">
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+        <input type="search" style="flex:1;min-width:280px" placeholder="Words to find" aria-label="Search words" @bind="_q" @bind:event="oninput" @onkeydown="OnKey" />
+        <button class="primary" @onclick="Run">Search</button>
+    </div>
+    <p class="small muted" style="margin-top:.5rem">
+        Tips: all words must appear · <span class="mono">"exact phrase"</span> · <span class="mono">budget OR forecast</span> ·
+        <span class="mono">contract*</span> finds words starting with “contract” · <span class="mono">-draft</span> leaves out results with “draft”.
+    </p>
+    <div class="filters" style="margin:.6rem 0 0">
+        <label>Person
+            <select @bind="_user" @bind:after="Run">
+                <option value="">Everyone</option>
+                @foreach (var u in _users) { <option value="@u.Uuid">@u.DisplayName</option> }
+            </select>
+        </label>
+        <label>From <input type="date" @bind="_from" @bind:after="Run" /></label>
+        <label>To <input type="date" @bind="_to" @bind:after="Run" /></label>
+        <label>Order
+            <select @bind="_sort" @bind:after="Run">
+                <option value="@SearchSort.Relevance">Best match</option>
+                <option value="@SearchSort.Newest">Newest first</option>
+                <option value="@SearchSort.Oldest">Oldest first</option>
+            </select>
+        </label>
+    </div>
+    <div class="filters" style="margin:.2rem 0 0">
+        <span class="small subtle" style="padding-bottom:.4rem">Look in:</span>
+        @foreach (var k in Kinds)
+        {
+            var kind = k;
+            <label class="check"><input type="checkbox" checked="@_kinds.Contains(kind.Key)" @onchange="e => Toggle(kind.Key, (bool)e.Value!)" /> @kind.Label</label>
+        }
+    </div>
+</div>
+
+@if (_results is { } r)
+{
+    @if (r.Error is not null)
+    {
+        <div class="banner medium">@r.Error</div>
+    }
+    else if (r.FtsQuery is null)
+    {
+        <div class="empty">Type at least one word to search for.</div>
+    }
+    else
+    {
+        <p class="subtle">@Fmt.Plural(r.Total, "result", "results") @if (Expert) { <span class="mono small muted"> · query: @r.FtsQuery</span> }</p>
+        @foreach (var h in _hits)
+        {
+            <div class="card">
+                <div style="display:flex;gap:.5rem;align-items:baseline;flex-wrap:wrap">
+                    <span class="tag">@KindLabel(h.Kind)</span>
+                    <a href="@Link(h)"><strong>@(h.Title ?? "(untitled)")</strong></a>
+                    <span class="muted small">@(h.UserName ?? "")@(h.Timestamp is null ? "" : " · " + When(h.Timestamp))</span>
+                </div>
+                <div class="md" style="margin-top:.35rem">@((MarkupString)h.SnippetHtml)</div>
+            </div>
+        }
+        @if (_hits.Count < r.Total)
+        {
+            <button style="margin-top:1rem" @onclick="More">Show more results</button>
+        }
+    }
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "q")] public string? QueryParam { get; set; }
+
+    private static readonly (string Key, string Label)[] Kinds =
+    [
+        (SearchKind.Message, "Chat messages"),
+        (SearchKind.Conversation, "Conversation titles"),
+        (SearchKind.Attachment, "Attachments"),
+        (SearchKind.Tool, "Claude's tool activity"),
+        (SearchKind.ProjectDoc, "Project documents"),
+        (SearchKind.Project, "Projects"),
+        (SearchKind.Memory, "Memories"),
+        (SearchKind.Artifact, "Artifacts & pages"),
+    ];
+
+    private string _q = "";
+    private string _user = "";
+    private DateTime? _from, _to;
+    private SearchSort _sort;
+    private readonly HashSet<string> _kinds = Kinds.Select(k => k.Key).ToHashSet();
+    private IReadOnlyList<UserSummary> _users = [];
+    private SearchResults? _results;
+    private List<SearchHit> _hits = [];
+    private string? _appliedQuery;
+
+    protected override void OnParametersSet()
+    {
+        if (QueryParam != _appliedQuery)
+        {
+            _appliedQuery = QueryParam;
+            _q = QueryParam ?? "";
+            _results = null;
+        }
+        base.OnParametersSet();
+    }
+
+    protected override void LoadData()
+    {
+        _users = Session.Queries.GetUsers();
+        if (_q.Length > 0) Run();
+    }
+
+    private void OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") Run();
+    }
+
+    private void Toggle(string key, bool on)
+    {
+        if (on) _kinds.Add(key); else _kinds.Remove(key);
+        Run();
+    }
+
+    private SearchRequest Request(int offset) => new(
+        _q,
+        _user.Length == 0 ? null : _user,
+        _from is { } f ? new DateTimeOffset(f.Date, TimeZoneInfo.Local.GetUtcOffset(f.Date)) : null,
+        _to is { } t ? new DateTimeOffset(t.Date.AddDays(1), TimeZoneInfo.Local.GetUtcOffset(t.Date)) : null,
+        _kinds.Count == Kinds.Length ? null : _kinds.ToList(),
+        _sort,
+        50,
+        offset);
+
+    private void Run()
+    {
+        if (!Session.IsReady) return;
+        if (_kinds.Count == 0) { _results = new SearchResults("", 0, []); _hits = []; return; }
+        _results = Session.Search.Search(Request(0));
+        _hits = _results.Hits.ToList();
+    }
+
+    private void More()
+    {
+        var next = Session.Search.Search(Request(_hits.Count));
+        _hits.AddRange(next.Hits);
+    }
+
+    private static string KindLabel(string kind) => Kinds.FirstOrDefault(k => k.Key == kind).Label ?? kind;
+
+    private static string Link(SearchHit h) => h.Kind switch
+    {
+        SearchKind.Message or SearchKind.Tool or SearchKind.Attachment => $"conversations/{h.TargetId}?m={Uri.EscapeDataString(h.RefId)}",
+        SearchKind.Conversation => $"conversations/{h.TargetId}",
+        SearchKind.Project or SearchKind.ProjectDoc => $"projects/{h.TargetId}",
+        SearchKind.Memory => $"memories/{h.TargetId}",
+        SearchKind.Artifact => $"artifacts/{h.TargetId}",
+        _ => "",
+    };
+}

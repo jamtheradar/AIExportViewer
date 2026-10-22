@@ -1,0 +1,62 @@
+@* Basic view: one plain-English line per tool step, expandable to a short, friendly result. *@
+<button class="step @(Result?.IsError == true ? "error" : "")" @onclick="() => _open = !_open" aria-expanded="@_open">
+    <span class="icon" aria-hidden="true">@Icon</span>
+    <span>@(Use is not null ? ToolStepDescriber.Describe(Use) : $"Result of {Result?.Name ?? "a tool"}")</span>
+    <span class="result">@ToolStepDescriber.Summarise(Result)</span>
+</button>
+@if (_open)
+{
+    <div class="step-detail">
+        @if (Result is null)
+        {
+            <p class="muted">The export has no result for this step.</p>
+        }
+        else
+        {
+            var web = Result.Items.Where(i => i.Type == "knowledge").ToList();
+            @if (web.Count > 0)
+            {
+                <ul>
+                    @foreach (var w in web.Take(20))
+                    {
+                        <li><ExtLink Url="@w.Url" Text="@(w.Title ?? w.Url)" /> <span class="muted small">@w.Site</span></li>
+                    }
+                </ul>
+                @if (web.Count > 20) { <p class="muted small">and @(web.Count - 20) more</p> }
+            }
+            @foreach (var f in Result.Items.Where(i => i.Type is "local_resource" or "image" or "image_gallery"))
+            {
+                <div><span class="tag">@(f.FileName ?? f.Title ?? f.Type)</span> <span class="muted small">file not included in export</span></div>
+            }
+            @if (Result.Display is { Code: { Length: > 0 } codeText })
+            {
+                <SafeHtml Text="@codeText" Plain="true" MaxChars="8000" />
+            }
+            else if (Result.Items.FirstOrDefault(i => i.Type == "text" && !string.IsNullOrWhiteSpace(i.Text)) is { } t)
+            {
+                <SafeHtml Text="@t.Text" Plain="true" MaxChars="4000" />
+            }
+            else if (Result.Display is { Text: { Length: > 0 } dt })
+            {
+                <SafeHtml Text="@dt" Plain="true" MaxChars="4000" />
+            }
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public ToolUseBlock? Use { get; set; }
+    [Parameter] public ToolResultBlock? Result { get; set; }
+
+    private bool _open;
+
+    private string Icon => (Use?.Name ?? Result?.Name ?? "") switch
+    {
+        "web_search" or "web_search_fast" or "image_search" or "conversation_search" or "tool_search" => "⌕",
+        "web_fetch" => "↗",
+        "bash_tool" => "›_",
+        "view" or "create_file" or "str_replace" or "present_files" => "▤",
+        "memory_read" => "◎",
+        _ => "⚙",
+    };
+}

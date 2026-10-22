@@ -1,0 +1,44 @@
+# --- Real export data: NEVER commit ---
+samples/
+**/samples/
+*.zip
+manifest-*.json
+# Any JSON export data outside source/test fixtures
+*.json
+!**/*.csproj.json
+!global.json
+!**/Properties/launchSettings.json
+!**/wwwroot/**/*.json
+!tests/**/Fixtures/**/*.json
+!**/appsettings*.json
+# Extracted export folders
+conversations-*/
+frames-*/
+light_metadata-*/
+memories-*/
+projects-*/
+extracted/
+# Search index / local caches
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.fts
+index/
+
+# --- .NET / IDE ---
+bin/
+obj/
+.vs/
+.vscode/
+*.user
+*.suo
+TestResults/
+*.binlog
+artifacts/
+.DS_Store
+
+# Claude local settings
+.claude/settings.local.json
+

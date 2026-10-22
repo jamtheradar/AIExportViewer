@@ -1,0 +1,112 @@
+@{
+    var human = Content.Sender == "human";
+}
+<article id="msg-@Content.Uuid" class="msg @(human ? "human" : "assistant") @(OffBranch ? "off-branch" : "")">
+    <div class="msg-head">
+        <span class="who">@(human ? (UserName ?? "Person") : Content.Sender == "assistant" ? "Claude" : Content.Sender)</span>
+        <span class="when">@Fmt.Date(Content.CreatedAt, Expert ? ViewMode.Expert : ViewMode.Basic)</span>
+        <span class="right">
+            @if (SiblingCount > 1)
+            {
+                <span class="branch-nav" title="This message was edited or the reply was retried">
+                    <button aria-label="Previous version" disabled="@(SiblingIndex == 0)" @onclick="() => Switch.InvokeAsync(-1)">‹</button>
+                    <span>Version @(SiblingIndex + 1) of @SiblingCount</span>
+                    <button aria-label="Next version" disabled="@(SiblingIndex >= SiblingCount - 1)" @onclick="() => Switch.InvokeAsync(1)">›</button>
+                </span>
+            }
+            @if (OffBranch) { <span class="tag">Not on the version shown</span> }
+            @if (Expert) { <span class="muted mono small" title="Message ID">@Content.Uuid[..Math.Min(8, Content.Uuid.Length)]</span> }
+        </span>
+    </div>
+
+    @if (Content.Blocks.Count == 0)
+    {
+        @if (!string.IsNullOrWhiteSpace(Content.FlatText))
+        {
+            <SafeHtml Text="@TextCompare.RemovePlaceholders(Content.FlatText)" />
+        }
+        else if (Content.Attachments.Count == 0 && Content.Files.Count == 0)
+        {
+            <p class="muted"><em>This message is empty in the export.</em></p>
+        }
+    }
+    else if (Expert)
+    {
+        @foreach (var b in Content.Blocks)
+        {
+            <BlockView Block="b" />
+        }
+    }
+    else
+    {
+        var results = Content.Blocks.OfType<ToolResultBlock>().Where(r => r.ToolUseId is not null)
+            .GroupBy(r => r.ToolUseId!).ToDictionary(g => g.Key, g => g.First());
+        var used = new HashSet<string>(Content.Blocks.OfType<ToolUseBlock>().Select(u => u.Id ?? ""));
+        var hasText = Content.Blocks.OfType<TextBlock>().Any(t => !string.IsNullOrWhiteSpace(t.Text));
+        @foreach (var b in Content.Blocks)
+        {
+            switch (b)
+            {
+                case TextBlock t:
+                    <SafeHtml Text="@t.Text" />
+                    var urls = t.Citations.Select(c => c.Url).Where(u => u is not null).Distinct().ToList();
+                    @if (urls.Count > 0)
+                    {
+                        <div class="sources">Sources: @for (var i = 0; i < urls.Count; i++) { var u = urls[i]; <ExtLink Url="@u" Text="@HostOf(u)" />@(i < urls.Count - 1 ? " · " : "") }</div>
+                    }
+                    break;
+                case ToolUseBlock u:
+                    <ToolStep Use="u" Result="@(u.Id is not null ? results.GetValueOrDefault(u.Id) : null)" />
+                    break;
+                case ToolResultBlock r when r.ToolUseId is null || !used.Contains(r.ToolUseId):
+                    <ToolStep Result="r" />
+                    break;
+                case UnknownBlock x:
+                    <p class="muted small">[A “@x.TypeName” item — switch to Expert view to see it]</p>
+                    break;
+            }
+        }
+        @if (!human && !hasText)
+        {
+            <p class="muted"><em>No written answer from Claude is in the export for this message.</em></p>
+        }
+    }
+
+    @if (Content.Attachments.Count > 0)
+    {
+        <div class="attachments">
+            @foreach (var a in Content.Attachments)
+            {
+                <details>
+                    <summary><span class="tag">Attachment</span> @(string.IsNullOrEmpty(a.FileName) ? "Pasted text" : a.FileName) <span class="muted small">@(a.FileSize is { } n ? Fmt.Bytes(n) : "")</span></summary>
+                    <SafeHtml Text="@a.Content" Plain="true" MaxChars="50000" />
+                </details>
+            }
+        </div>
+    }
+    @if (Content.Files.Count > 0)
+    {
+        <div class="files">
+            @foreach (var f in Content.Files)
+            {
+                <span class="tag" title="The file itself is not included in the export">@(string.IsNullOrEmpty(f.FileName) ? "Unnamed file" : f.FileName) · not in export</span>
+            }
+        </div>
+    }
+    @if (Expert)
+    {
+        <details style="margin-top:.5rem"><summary class="small">All message fields</summary><AllFields Raw="@Content.Raw" /></details>
+    }
+</article>
+
+@code {
+    [Parameter, EditorRequired] public MessageContent Content { get; set; } = default!;
+    [Parameter] public string? UserName { get; set; }
+    [Parameter] public bool Expert { get; set; }
+    [Parameter] public bool OffBranch { get; set; }
+    [Parameter] public int SiblingIndex { get; set; }
+    [Parameter] public int SiblingCount { get; set; } = 1;
+    [Parameter] public EventCallback<int> Switch { get; set; }
+
+    private static string HostOf(string? url) => Uri.TryCreate(url, UriKind.Absolute, out var u) ? u.Host : url ?? "";
+}

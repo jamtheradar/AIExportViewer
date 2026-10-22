@@ -1,0 +1,14 @@
+@* A URL from the export. It never navigates: clicking asks for confirmation first (see ExternalLinks). *@
+@if (SafeHtmlRenderer.IsAllowedUrl(Url))
+{
+    <span class="ext-link" style="color:var(--accent);text-decoration:underline dotted;cursor:pointer;overflow-wrap:anywhere" data-href="@Url" role="link" tabindex="0" title="@Url">@(Text ?? Url)</span>
+}
+else
+{
+    <span style="overflow-wrap:anywhere">@(Text ?? Url)</span>
+}
+
+@code {
+    [Parameter] public string? Url { get; set; }
+    [Parameter] public string? Text { get; set; }
+}

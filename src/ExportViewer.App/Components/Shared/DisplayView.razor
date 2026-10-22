@@ -1,0 +1,25 @@
+@* What the Claude app displayed for a tool step (display_content). *@
+@if (Display is { } d)
+{
+    <details>
+        <summary class="small">Shown in Claude as: @d.Type</summary>
+        @if (d.Filename is not null) { <div class="mono small">@d.Filename</div> }
+        @if (d.Code is not null) { <SafeHtml Text="@d.Code" Plain="true" MaxChars="20000" /> }
+        @if (d.Text is not null) { <SafeHtml Text="@d.Text" Plain="true" MaxChars="20000" /> }
+        @if (d.LinkUrl is not null) { <div><ExtLink Url="@d.LinkUrl" Text="@(d.LinkTitle ?? d.LinkUrl)" /></div> }
+        @if (d.Table is { Count: > 0 } table)
+        {
+            <div class="table-wrap"><table class="data">
+                @foreach (var row in table)
+                {
+                    <tr>@foreach (var cell in row) { <td class="small">@cell</td> }</tr>
+                }
+            </table></div>
+        }
+        <details><summary class="small">All fields</summary><AllFields Raw="@d.Raw" /></details>
+    </details>
+}
+
+@code {
+    [Parameter] public DisplayContent? Display { get; set; }
+}

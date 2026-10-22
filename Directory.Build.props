@@ -1,0 +1,17 @@
+<Project>
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- Only src/ExportViewer.Download (Phase 3) may set this to true. -->
+    <AllowNetworkAccess Condition="'$(AllowNetworkAccess)' == ''">false</AllowNetworkAccess>
+  </PropertyGroup>
+
+  <!-- Privacy rule: no network APIs. BannedSymbols.txt lists them; RS0030 fails the build. -->
+  <ItemGroup Condition="'$(AllowNetworkAccess)' != 'true'">
+    <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" PrivateAssets="all" />
+    <AdditionalFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.txt" />
+  </ItemGroup>
+</Project>

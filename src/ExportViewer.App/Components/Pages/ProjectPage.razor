@@ -1,0 +1,76 @@
+@page "/projects/{Id}"
+@inherits PageBase
+
+@if (_p is null)
+{
+    <div class="empty">@(Session.IsReady ? "This project is not in the export." : "Open an export first.")</div>
+    return;
+}
+
+<div class="page-head">
+    <div>
+        <h1>@(string.IsNullOrWhiteSpace(_p.Summary.Name) ? "(unnamed project)" : _p.Summary.Name)</h1>
+        <p class="subtle">
+            Created by <a href="@($"users/{_p.Summary.CreatorUuid}")">@(_p.Summary.CreatorName ?? "unknown")</a>
+            · updated @When(_p.Summary.UpdatedAt)
+            · @(_p.Summary.IsPrivate ? "Private" : "Shared with the organisation")
+        </p>
+    </div>
+    <button @onclick='() => Nav.NavigateTo("projects")'>Back to projects</button>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_p.Summary.Description))
+{
+    <div class="card"><h2 style="margin-top:0">Description</h2><SafeHtml Text="@_p.Summary.Description" Plain="true" /></div>
+}
+@if (!string.IsNullOrWhiteSpace(_p.PromptTemplate))
+{
+    <div class="card"><h2 style="margin-top:0">Instructions for Claude</h2><SafeHtml Text="@_p.PromptTemplate" Plain="true" /></div>
+}
+
+<h2>Knowledge documents (@_p.Docs.Count)</h2>
+@if (_p.Docs.Count == 0)
+{
+    <p class="muted">No documents.</p>
+}
+@foreach (var d in _p.Docs)
+{
+    <details class="card">
+        <summary>
+            <strong>@(string.IsNullOrWhiteSpace(d.Filename) ? "(no file name)" : d.Filename)</strong>
+            <span class="muted small"> · @Fmt.Plural(d.Content?.Length ?? 0, "character", "characters") · added @Fmt.Day(d.CreatedAt)</span>
+        </summary>
+        <p class="small muted">Text extracted from the document. Original formatting and images are not in the export.</p>
+        @if (IsMarkdown(d.Filename)) { <SafeHtml Text="@d.Content" /> } else { <SafeHtml Text="@d.Content" Plain="true" /> }
+        @if (Expert) { <p class="mono small muted">Document ID @d.Uuid</p> }
+    </details>
+}
+
+@if (_p.Memories.Count > 0)
+{
+    <h2>What Claude remembers about this project</h2>
+    @foreach (var m in _p.Memories)
+    {
+        <details class="card">
+            <summary><strong>@(m.UserName ?? "Unknown person")</strong>'s project memory</summary>
+            <SafeHtml Text="@m.Content" />
+        </details>
+    }
+}
+
+@if (Expert)
+{
+    <h2>Details</h2>
+    <ExpertDetails Raw="@_p.Raw" Sources="_p.Sources" Note="Document contents are stored separately and shown above." />
+}
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    private ProjectDetail? _p;
+
+    protected override void LoadData() => _p = Session.Queries.GetProject(Id);
+
+    private static bool IsMarkdown(string? name) =>
+        name is not null && (name.EndsWith(".md", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".markdown", StringComparison.OrdinalIgnoreCase));
+}

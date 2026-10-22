@@ -1,0 +1,76 @@
+@* Recursive, collapsible JSON viewer. Values are rendered as text (Blazor encodes them), never as markup. *@
+<li>
+    @switch (Element.ValueKind)
+    {
+        case JsonValueKind.Object:
+        case JsonValueKind.Array:
+            var isArray = Element.ValueKind == JsonValueKind.Array;
+            var count = isArray ? Element.GetArrayLength() : Element.EnumerateObject().Count();
+            <button class="toggle" @onclick="() => _open = !_open" aria-expanded="@_open">@(_open ? "▾" : "▸")</button>
+            @if (Name is not null) { <span class="key">@Name: </span> }
+            <span class="muted">@(isArray ? $"[{count}]" : $"{{{count}}}")</span>
+            @if (_open && count > 0)
+            {
+                <ul>
+                    @if (isArray)
+                    {
+                        var i = 0;
+                        foreach (var item in Element.EnumerateArray().Take(_limit))
+                        {
+                            <JsonNode Element="item" Name="@($"{i++}")" Depth="Depth + 1" />
+                        }
+                    }
+                    else
+                    {
+                        foreach (var p in Element.EnumerateObject().Take(_limit))
+                        {
+                            <JsonNode Element="p.Value" Name="@p.Name" Depth="Depth + 1" />
+                        }
+                    }
+                    @if (count > _limit)
+                    {
+                        <li><button class="link small" @onclick="() => _limit += 200">Show @Math.Min(200, count - _limit) more of @(count - _limit)</button></li>
+                    }
+                </ul>
+            }
+            break;
+        case JsonValueKind.String:
+            var s = Element.GetString() ?? "";
+            if (Name is not null) { <span class="key">@Name: </span> }
+            @if (s.Length > 600 && !_full)
+            {
+                <span class="str">"@s[..600]…"</span>
+                <button class="link small" @onclick="() => _full = true">show all @s.Length.ToString("N0") characters</button>
+            }
+            else
+            {
+                <span class="str">"@s"</span>
+            }
+            break;
+        case JsonValueKind.Number:
+            if (Name is not null) { <span class="key">@Name: </span> }
+            <span class="num">@Element.GetRawText()</span>
+            break;
+        case JsonValueKind.True:
+        case JsonValueKind.False:
+            if (Name is not null) { <span class="key">@Name: </span> }
+            <span class="bool">@Element.GetRawText()</span>
+            break;
+        default:
+            if (Name is not null) { <span class="key">@Name: </span> }
+            <span class="null">null</span>
+            break;
+    }
+</li>
+
+@code {
+    [Parameter, EditorRequired] public JsonElement Element { get; set; }
+    [Parameter] public string? Name { get; set; }
+    [Parameter] public int Depth { get; set; }
+
+    private bool _open;
+    private bool _full;
+    private int _limit = 200;
+
+    protected override void OnInitialized() => _open = Depth < 1;
+}

@@ -1,0 +1,21 @@
+@if (Total > PageSize)
+{
+    <div class="pager">
+        <button disabled="@(Offset == 0)" @onclick="() => Go(Math.Max(0, Offset - PageSize))">Previous</button>
+        <span>@Fmt.N(Offset + 1)–@Fmt.N(Math.Min(Total, Offset + PageSize)) of @Fmt.N(Total)</span>
+        <button disabled="@(Offset + PageSize >= Total)" @onclick="() => Go(Offset + PageSize)">Next</button>
+    </div>
+}
+else if (Total > 0)
+{
+    <div class="pager">@Fmt.Plural(Total, "item", "items")</div>
+}
+
+@code {
+    [Parameter] public int Total { get; set; }
+    [Parameter] public int Offset { get; set; }
+    [Parameter] public int PageSize { get; set; } = 50;
+    [Parameter] public EventCallback<int> OffsetChanged { get; set; }
+
+    private Task Go(int offset) => OffsetChanged.InvokeAsync(offset);
+}

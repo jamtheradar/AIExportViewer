@@ -1,0 +1,179 @@
+@page "/conversations/{Id}"
+@inherits PageBase
+@inject IJSRuntime JS
+
+@if (_d is null)
+{
+    <div class="empty">@(Session.IsReady ? "This conversation is not in the export." : "Open an export first.")</div>
+    return;
+}
+
+<div class="page-head">
+    <div>
+        <h1>@_d.Header.Title</h1>
+        <p class="subtle">
+            <a href="@($"users/{_d.Header.AccountUuid}")">@(_d.Header.UserName ?? "Unknown person")</a>
+            · @When(_d.Header.FirstMessageAt) to @When(_d.Header.LastMessageAt)
+            · @Fmt.Plural(_d.Header.MessageCount, "message", "messages")
+            @if (_tree is { ForkCount: > 0 }) { <span> · edited or retried @Fmt.Plural(_tree.ForkCount, "time", "times")</span> }
+        </p>
+    </div>
+    <button @onclick='() => Nav.NavigateTo("conversations")'>Back to list</button>
+</div>
+
+@if (_d.Flags.Count > 0 && (Expert || _d.Flags.Any(f => f.Severity >= Severity.Medium)))
+{
+    var top = _d.Flags.Max(f => f.Severity);
+    <div class="banner @Fmt.SeverityClass(top)">
+        <StatusBadge Severity="top" />
+        <ul>
+            @foreach (var f in _d.Flags.Where(f => Expert || f.Severity >= Severity.Medium))
+            {
+                <li>
+                    @f.Detail
+                    @if (f.MessageUuid is { } m) { <button class="link small" @onclick="() => JumpTo(m)">Show message</button> }
+                    @if (Expert) { <span class="muted mono small"> (@f.Code)</span> }
+                </li>
+            }
+        </ul>
+    </div>
+}
+
+@if (!string.IsNullOrWhiteSpace(_d.Header.Summary))
+{
+    <details class="card" style="margin-bottom:1rem">
+        <summary><strong>Summary written by Claude</strong></summary>
+        <SafeHtml Text="@_d.Header.Summary" />
+    </details>
+}
+
+@if (Expert)
+{
+    <div class="tabs">
+        <button class="@(_tab == 0 ? "on" : "")" @onclick="() => _tab = 0">Conversation</button>
+        <button class="@(_tab == 1 ? "on" : "")" @onclick="() => _tab = 1">Conversation fields</button>
+    </div>
+    <div style="margin-bottom:.8rem">
+        <label class="small"><input type="checkbox" @bind="_showAll" /> Show every message, including other versions (@Fmt.N(_d.Messages.Count) in total)</label>
+    </div>
+}
+
+@if (Expert && _tab == 1)
+{
+    <ExpertDetails Raw="@_d.Raw" Sources="_d.Sources" Note="Messages are stored separately; open a message's “All message fields” to see each one." />
+}
+else
+{
+    <div class="transcript">
+        @foreach (var row in Visible)
+        {
+            var (index, count) = SiblingPosition(row.Uuid);
+            <MessageCard Content="@ContentOf(row)" UserName="@_d.Header.UserName" Expert="Expert"
+                         OffBranch="@(_showAll && Expert && !_onPath.Contains(row.Uuid))"
+                         SiblingIndex="index" SiblingCount="count" Switch="@(step => SwitchBranch(row.Uuid, step))" />
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "m")] public string? MessageParam { get; set; }
+
+    private ConversationDetail? _d;
+    private MessageTree? _tree;
+    private Dictionary<string, MessageRow> _rows = new();
+    private readonly Dictionary<string, MessageContent> _content = new();
+    private readonly Dictionary<string, string> _choices = new();
+    private IReadOnlyList<TreeNode> _path = [];
+    private HashSet<string> _onPath = [];
+    private bool _showAll;
+    private int _tab;
+    private string? _scrollTo;
+    private string? _loadedId;
+
+    private IEnumerable<MessageRow> Visible =>
+        _showAll && Expert ? _d!.Messages.OrderBy(m => m.CreatedAt, StringComparer.Ordinal).ThenBy(m => m.Seq) : _path.Select(n => _rows[n.Uuid]);
+
+    protected override void LoadData()
+    {
+        if (_loadedId != Id)
+        {
+            _choices.Clear();
+            _content.Clear();
+            _showAll = false;
+            _tab = 0;
+            _loadedId = Id;
+        }
+        _d = Session.Queries.GetConversation(Id);
+        if (_d is null) return;
+        _rows = _d.Messages.ToDictionary(m => m.Uuid);
+        _tree = MessageTree.Build(_d.Messages.Select(m => new TreeNode(m.Uuid, m.ParentUuid, m.CreatedAt, m.Seq)));
+        if (MessageParam is { } m && _rows.ContainsKey(m)) ChooseBranchContaining(m);
+        Recompute();
+    }
+
+    private void Recompute()
+    {
+        _path = _tree!.Path(_choices);
+        _onPath = _path.Select(n => n.Uuid).ToHashSet();
+    }
+
+    private MessageContent ContentOf(MessageRow row)
+    {
+        if (!_content.TryGetValue(row.Uuid, out var c)) _content[row.Uuid] = c = MessageContent.Parse(row.Raw);
+        return c;
+    }
+
+    private bool IsRoot(string uuid) => _tree!.Roots.Any(r => r.Uuid == uuid);
+
+    private string ParentKey(string uuid) => IsRoot(uuid) ? MessageTree.RootSentinel : _rows[uuid].ParentUuid!;
+
+    private (int Index, int Count) SiblingPosition(string uuid)
+    {
+        var sibs = _tree!.SiblingsOf(uuid);
+        return (sibs.ToList().FindIndex(s => s.Uuid == uuid), sibs.Count);
+    }
+
+    private void SwitchBranch(string uuid, int step)
+    {
+        var sibs = _tree!.SiblingsOf(uuid);
+        var i = sibs.ToList().FindIndex(s => s.Uuid == uuid) + step;
+        if (i < 0 || i >= sibs.Count) return;
+        _choices[ParentKey(uuid)] = sibs[i].Uuid;
+        Recompute();
+    }
+
+    private void ChooseBranchContaining(string uuid)
+    {
+        var guard = new HashSet<string>();
+        var cur = uuid;
+        while (_rows.ContainsKey(cur) && guard.Add(cur))
+        {
+            var key = ParentKey(cur);
+            _choices[key] = cur;
+            if (key == MessageTree.RootSentinel) break;
+            cur = key;
+        }
+        _scrollTo = uuid;
+    }
+
+    private void JumpTo(string uuid)
+    {
+        _tab = 0;
+        if (!_onPath.Contains(uuid))
+        {
+            ChooseBranchContaining(uuid);
+            Recompute();
+        }
+        _scrollTo = uuid;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_scrollTo is { } id)
+        {
+            _scrollTo = null;
+            await JS.InvokeVoidAsync("aiev.scrollToId", "msg-" + id);
+        }
+    }
+}

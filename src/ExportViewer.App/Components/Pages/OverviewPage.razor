@@ -1,0 +1,121 @@
+@page "/overview"
+@inherits PageBase
+
+<div class="page-head">
+    <div>
+        <h1>Overview</h1>
+        @if (_o is { } head)
+        {
+            <p class="subtle">
+                @if (head.FirstActivity is not null)
+                {
+                    <span>Activity from <strong>@Fmt.Day(head.FirstActivity)</strong> to <strong>@Fmt.Day(head.LastActivity)</strong></span>
+                }
+                @if (head.Exports.Count > 0)
+                {
+                    <span> · combined from @Fmt.Plural(head.Exports.Count, "export", "exports")</span>
+                }
+            </p>
+        }
+    </div>
+</div>
+
+@if (!Session.IsReady)
+{
+    <div class="empty">Open an export from the Home page to see the overview.</div>
+}
+else if (_o is { } o)
+{
+    <div class="tiles">
+        <a class="tile" href="users"><div class="value">@Fmt.N(o.Users)</div><div class="label">People</div></a>
+        <a class="tile" href="conversations"><div class="value">@Fmt.N(o.Conversations)</div><div class="label">Conversations</div></a>
+        <div class="tile"><div class="value">@Fmt.N(o.Messages)</div><div class="label">Messages</div></div>
+        <a class="tile" href="projects"><div class="value">@Fmt.N(o.Projects)</div><div class="label">Projects</div></a>
+        <a class="tile" href="memories"><div class="value">@Fmt.N(o.Memories)</div><div class="label">People with memory</div></a>
+        <a class="tile" href="artifacts"><div class="value">@Fmt.N(o.Artifacts)</div><div class="label">Artifacts &amp; pages</div></a>
+        @if (Expert)
+        {
+            <a class="tile" href="other"><div class="value">@Fmt.N(o.GenericRecords)</div><div class="label">Other records</div></a>
+        }
+    </div>
+
+    @if (o.FlaggedHigh + o.FlaggedMedium + (Expert ? o.FlaggedLow : 0) > 0)
+    {
+        <div class="banner @(o.FlaggedHigh > 0 ? "high" : "medium")">
+            <strong>Some conversations may be incomplete in this export.</strong>
+            <ul>
+                @if (o.FlaggedHigh > 0) { <li><a href="conversations?flag=3">@Fmt.Plural(o.FlaggedHigh, "conversation ends", "conversations end")</a> without a full reply from Claude.</li> }
+                @if (o.FlaggedMedium > 0) { <li><a href="conversations?flag=2">@Fmt.Plural(o.FlaggedMedium, "conversation has", "conversations have")</a> an empty reply part-way through.</li> }
+                @if (Expert && o.FlaggedLow > 0) { <li><a href="conversations?flag=1">@Fmt.Plural(o.FlaggedLow, "conversation was", "conversations were")</a> changed well after the last message (often just a rename).</li> }
+            </ul>
+            <p class="small muted">This is about what Anthropic included in the export, not something the person did.</p>
+        </div>
+    }
+
+    <div class="grid-2">
+        <div class="card">
+            <h2 style="margin-top:0">Messages sent by people</h2>
+            <ActivityChart Points="_points" By="_grain" AriaLabel="Messages sent by people over time" />
+        </div>
+        <div class="card">
+            <h2 style="margin-top:0">Most active people</h2>
+            <p class="small muted">Messages sent to Claude in this export</p>
+            @if (_top.Count == 0)
+            {
+                <div class="empty">No messages yet.</div>
+            }
+            else
+            {
+                var max = _top.Max(t => t.Count);
+                <div class="hbars">
+                    @foreach (var t in _top)
+                    {
+                        <div class="hbar">
+                            <a class="name" href="@($"users/{t.Uuid}")" title="@t.Name">@t.Name</a>
+                            <div class="track"><div class="fill" style="width:@(Pct(t.Count, max))%"></div></div>
+                            <span class="val">@Fmt.N(t.Count)</span>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (Expert && o.Exports.Count > 0)
+    {
+        <h2>Exports in this library</h2>
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>Folder</th><th>Created by Anthropic</th><th class="num">Files listed</th></tr></thead>
+                <tbody>
+                    @foreach (var e in o.Exports)
+                    {
+                        <tr><td class="mono small">@(e.Folder.Length == 0 ? "(library folder)" : e.Folder)</td><td>@When(e.CreatedAt)</td><td class="num">@e.TotalFiles</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+}
+
+@code {
+    private Overview? _o;
+    private IReadOnlyList<ActivityChart.Point> _points = [];
+    private ActivityChart.Grain _grain;
+    private List<(string Uuid, string Name, int Count)> _top = [];
+
+    protected override void LoadData()
+    {
+        var q = Session.Queries;
+        _o = q.GetOverview();
+        var activity = q.GetActivity();
+        (_points, _grain) = ActivityChart.Bucket(activity.Select(a => Fmt.Parse(a.CreatedAt)).OfType<DateTimeOffset>());
+        var names = q.GetUserNames();
+        _top = activity.GroupBy(a => a.AccountUuid)
+            .Select(g => (g.Key, names.GetValueOrDefault(g.Key) ?? "Unknown person", g.Count()))
+            .OrderByDescending(t => t.Item3).Take(10).ToList();
+    }
+
+    private static string Pct(int v, int max) =>
+        (100.0 * v / Math.Max(1, max)).ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+}

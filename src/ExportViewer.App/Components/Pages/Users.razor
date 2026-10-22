@@ -1,0 +1,64 @@
+@page "/users"
+@inherits PageBase
+
+<div class="page-head">
+    <div>
+        <h1>Users</h1>
+        <p class="subtle">Everyone in the export, most active first.</p>
+    </div>
+    <input type="search" placeholder="Filter by name or email" @bind="_filter" @bind:event="oninput" aria-label="Filter people" />
+</div>
+
+@if (_users.Count == 0)
+{
+    <div class="empty">No people in this export.</div>
+}
+else
+{
+    <div class="table-wrap">
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    @if (Expert) { <th>Phone</th> }
+                    <th class="num">Conversations</th>
+                    <th class="num">Messages</th>
+                    <th>First activity</th>
+                    <th>Last activity</th>
+                    @if (Expert) { <th class="num">Sign-ins</th><th>ID</th> }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var u in Filtered)
+                {
+                    <tr class="clickable" @onclick='() => Nav.NavigateTo($"users/{u.Uuid}")'>
+                        <td>
+                            <a href="@($"users/{u.Uuid}")" @onclick:stopPropagation="true">@u.DisplayName</a>
+                            @if (!u.InUserList) { <span class="tag" title="This person appears in conversations but not in the export's user list">Not in user list</span> }
+                        </td>
+                        <td>@u.Email</td>
+                        @if (Expert) { <td class="nowrap">@u.Phone</td> }
+                        <td class="num">@Fmt.N(u.Conversations)</td>
+                        <td class="num">@Fmt.N(u.Messages)</td>
+                        <td class="nowrap">@Fmt.Day(u.FirstActivity)</td>
+                        <td class="nowrap">@Fmt.Day(u.LastActivity)</td>
+                        @if (Expert) { <td class="num">@u.Logins</td><td class="mono small">@u.Uuid</td> }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<UserSummary> _users = [];
+    private string _filter = "";
+
+    private IEnumerable<UserSummary> Filtered => string.IsNullOrWhiteSpace(_filter)
+        ? _users
+        : _users.Where(u => u.DisplayName.Contains(_filter, StringComparison.CurrentCultureIgnoreCase)
+                            || (u.Email?.Contains(_filter, StringComparison.CurrentCultureIgnoreCase) ?? false));
+
+    protected override void LoadData() => _users = Session.Queries.GetUsers();
+}

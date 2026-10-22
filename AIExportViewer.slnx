@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ExportViewer.App/ExportViewer.App.csproj" />
+    <Project Path="src/ExportViewer.Core/ExportViewer.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ExportViewer.Core.Tests/ExportViewer.Core.Tests.csproj" />
+  </Folder>
+</Solution>

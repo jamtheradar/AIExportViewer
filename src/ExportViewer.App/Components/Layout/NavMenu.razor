@@ -1,0 +1,42 @@
+﻿@implements IDisposable
+@inject LibrarySession Session
+@inject ViewModeService View
+
+<nav class="nav" aria-label="Main">
+    <div class="brand">AI Export Viewer<small>Claude organisation export</small></div>
+
+    <NavLink href="" Match="NavLinkMatch.All">Home</NavLink>
+    <div class="section">Review</div>
+    <NavLink href="overview" class="@Disabled">Overview</NavLink>
+    <NavLink href="users" class="@Disabled">Users</NavLink>
+    <NavLink href="conversations" class="@Disabled">Conversations</NavLink>
+    <NavLink href="projects" class="@Disabled">Projects</NavLink>
+    <NavLink href="memories" class="@Disabled">Memories</NavLink>
+    <NavLink href="artifacts" class="@Disabled">Artifacts &amp; pages</NavLink>
+    @if (View.IsExpert)
+    {
+        <NavLink href="other" class="@Disabled">Other data</NavLink>
+    }
+    <NavLink href="search" class="@Disabled">Search</NavLink>
+    <NavLink href="library" class="@Disabled">Files loaded</NavLink>
+    <div class="spacer"></div>
+    <NavLink href="settings">Settings</NavLink>
+</nav>
+
+@code {
+    private string Disabled => Session.IsReady ? "" : "disabled";
+
+    protected override void OnInitialized()
+    {
+        Session.Changed += OnChanged;
+        View.Changed += OnChanged;
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Session.Changed -= OnChanged;
+        View.Changed -= OnChanged;
+    }
+}

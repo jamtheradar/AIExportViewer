@@ -1,0 +1,9 @@
+@* The only place export content becomes markup, and only via SafeHtmlRenderer. *@
+<div class="md @Class">@((MarkupString)(Plain ? SafeHtmlRenderer.PlainText(Text, MaxChars) : SafeHtmlRenderer.Markdown(Text, MaxChars)))</div>
+
+@code {
+    [Parameter] public string? Text { get; set; }
+    [Parameter] public bool Plain { get; set; }
+    [Parameter] public int MaxChars { get; set; } = 200_000;
+    [Parameter] public string? Class { get; set; }
+}

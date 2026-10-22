@@ -1,0 +1,37 @@
+@* Expert-only panel: every field, the original JSON, and which export files the record came from. *@
+<div class="card">
+    <div class="tabs" role="tablist">
+        <button class="@(_tab == 0 ? "on" : "")" @onclick="() => _tab = 0">All fields</button>
+        <button class="@(_tab == 1 ? "on" : "")" @onclick="() => _tab = 1">Raw JSON</button>
+        @if (Sources is not null)
+        {
+            <button class="@(_tab == 2 ? "on" : "")" @onclick="() => _tab = 2">Source files (@Sources.Count)</button>
+        }
+    </div>
+    @if (Note is not null) { <p class="small muted">@Note</p> }
+    @switch (_tab)
+    {
+        case 0:
+            <AllFields Raw="@Raw" />
+            break;
+        case 1:
+            <pre class="raw">@(Raw is null ? "" : Fmt.PrettyJson(Raw))</pre>
+            break;
+        default:
+            <ul class="mono small">
+                @foreach (var s in Sources ?? [])
+                {
+                    <li>@s</li>
+                }
+            </ul>
+            break;
+    }
+</div>
+
+@code {
+    [Parameter] public string? Raw { get; set; }
+    [Parameter] public IReadOnlyList<string>? Sources { get; set; }
+    [Parameter] public string? Note { get; set; }
+
+    private int _tab;
+}

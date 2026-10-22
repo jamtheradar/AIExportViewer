@@ -1,0 +1,177 @@
+@page "/settings"
+@inject AppSettings Settings
+@inject LocalData Local
+@inject AppLog Log
+@inject ViewModeService View
+@inject LibrarySession Session
+
+<div class="page-head">
+    <div>
+        <h1>Settings</h1>
+        <p class="subtle">This app works entirely offline. It never connects to the internet, and it never changes your export files.</p>
+    </div>
+</div>
+
+<div class="card">
+    <h2 style="margin-top:0">View</h2>
+    <p>Choose how much detail to show when the app starts. You can switch at any time with the Basic / Expert buttons at the top.</p>
+    <div class="segmented" role="group" aria-label="Default view">
+        <button class="@(Settings.Data.DefaultViewMode == ViewMode.Basic ? "on" : "")" @onclick="() => SetDefault(ViewMode.Basic)">Basic</button>
+        <button class="@(Settings.Data.DefaultViewMode == ViewMode.Expert ? "on" : "")" @onclick="() => SetDefault(ViewMode.Expert)">Expert</button>
+    </div>
+    <p class="small muted" style="margin-top:.5rem"><strong>Basic</strong> shows what a reviewer needs. <strong>Expert</strong> shows every field in the export, IDs, timestamps in UTC, the original data and which file each record came from.</p>
+</div>
+
+<div class="card">
+    <h2 style="margin-top:0">Data stored on this computer</h2>
+    <p>To open large exports quickly, the app keeps a searchable copy of each export it has opened. It stays on this computer only, in this folder:</p>
+    <p class="mono small">@Settings.DataFolder</p>
+    <p>Total: <strong>@Fmt.Bytes(_total)</strong></p>
+
+    @if (_dbs.Count > 0)
+    {
+        <div class="table-wrap" style="margin:.6rem 0">
+            <table class="data">
+                <thead><tr><th>Copy of export folder</th><th class="num">Size</th><th>Last used</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var d in _dbs)
+                    {
+                        <tr>
+                            <td class="mono small">@(d.LibraryRoot ?? Path.GetFileName(d.FilePath))</td>
+                            <td class="num">@Fmt.Bytes(d.Bytes)</td>
+                            <td class="nowrap">@d.LastWrite.ToString("d MMM yyyy, h:mm tt")</td>
+                            <td class="num"><button class="danger" @onclick="() => _confirmDb = d">Delete</button></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else
+    {
+        <p class="muted">No saved copies.</p>
+    }
+
+    <label style="display:flex;gap:.5rem;align-items:flex-start;margin:.8rem 0">
+        <input type="checkbox" checked="@Settings.Data.MemoryOnly" @onchange="e => Settings.Update(d => d.MemoryOnly = (bool)e.Value!)" />
+        <span>Don't save a copy. Keep everything in memory only, so nothing is written to disk.
+            <span class="muted small">Exports are read again from scratch every time they are opened, and large exports need more memory. Takes effect next time you open an export.</span></span>
+    </label>
+
+    <button class="danger" @onclick="() => _confirmAll = true">Delete all local data</button>
+    <span class="small muted" style="margin-left:.5rem">Removes the saved copies, recent folders list, settings and log. Your export files are not touched.</span>
+</div>
+
+<div class="card">
+    <h2 style="margin-top:0">Recently opened folders</h2>
+    <p>@Fmt.Plural(Settings.Data.Recent.Count, "folder location is", "folder locations are") remembered. Only the locations are stored, not any content.</p>
+    <button @onclick="ClearRecent" disabled="@(Settings.Data.Recent.Count == 0)">Clear the list</button>
+</div>
+
+<div class="card">
+    <h2 style="margin-top:0">Troubleshooting log</h2>
+    <label style="display:flex;gap:.5rem;align-items:flex-start">
+        <input type="checkbox" checked="@Settings.Data.LoggingEnabled" @onchange="e => Settings.Update(d => d.LoggingEnabled = (bool)e.Value!)" />
+        <span>Keep a troubleshooting log. <span class="muted small">Off unless you turn it on. It records only file counts and timings, never what people wrote.</span></span>
+    </label>
+    @if (File.Exists(Log.LogFile))
+    {
+        <p class="small"><span class="mono">@Log.LogFile</span> (@Fmt.Bytes(new FileInfo(Log.LogFile).Length)) <button class="link" @onclick="DeleteLog">Delete log</button></p>
+    }
+</div>
+
+<div class="card">
+    <h2 style="margin-top:0">About</h2>
+    <dl class="props">
+        <dt>Version</dt><dd>@AppInfo.Current.VersionString</dd>
+        <dt>Internet access</dt><dd>None. The app makes no network connections, has no updates, telemetry or crash reporting.</dd>
+        <dt>Your export files</dt><dd>Only read, never changed, moved or deleted.</dd>
+    </dl>
+</div>
+
+@if (_confirmDb is { } db)
+{
+    <div class="overlay" role="dialog" aria-modal="true">
+        <div class="dialog">
+            <h2>Delete this saved copy?</h2>
+            <p class="mono small">@(db.LibraryRoot ?? db.FilePath)</p>
+            <p>The export folder itself is not touched. Opening it again will read it from scratch.</p>
+            <div class="actions">
+                <button @onclick="() => _confirmDb = null">Cancel</button>
+                <button class="danger" @onclick="() => DeleteDb(db)">Delete</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_confirmAll)
+{
+    <div class="overlay" role="dialog" aria-modal="true">
+        <div class="dialog">
+            <h2>Delete all local data?</h2>
+            <p>This closes the open export and removes everything the app has stored on this computer (@Fmt.Bytes(_total)): saved copies, the recent folders list, settings and the log.</p>
+            <p>Your export files are not touched.</p>
+            <div class="actions">
+                <button @onclick="() => _confirmAll = false">Cancel</button>
+                <button class="danger" @onclick="DeleteAll">Delete everything</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_message is not null)
+{
+    <div class="banner info" style="position:fixed;bottom:1rem;right:1rem;max-width:420px" role="status">@_message</div>
+}
+
+@code {
+    private IReadOnlyList<LocalDatabase> _dbs = [];
+    private long _total;
+    private LocalDatabase? _confirmDb;
+    private bool _confirmAll;
+    private string? _message;
+
+    protected override void OnInitialized() => Refresh();
+
+    private void Refresh()
+    {
+        _dbs = Local.Databases();
+        _total = Local.TotalBytes();
+    }
+
+    private void SetDefault(ViewMode mode)
+    {
+        Settings.Update(d => d.DefaultViewMode = mode);
+        View.Set(mode);
+    }
+
+    private void DeleteDb(LocalDatabase db)
+    {
+        _confirmDb = null;
+        Run(() => Local.DeleteDatabase(db.FilePath), "Saved copy deleted.");
+    }
+
+    private void DeleteAll()
+    {
+        _confirmAll = false;
+        Run(Local.DeleteAll, "All local data deleted.");
+    }
+
+    private void ClearRecent() => Settings.Update(d => d.Recent.Clear());
+
+    private void DeleteLog() => Run(() => File.Delete(Log.LogFile), "Log deleted.");
+
+    private void Run(Action action, string done)
+    {
+        try
+        {
+            action();
+            _message = done;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _message = "Some files could not be deleted because they are in use. Close the export and try again.";
+        }
+        Refresh();
+    }
+}

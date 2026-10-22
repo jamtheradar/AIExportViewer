@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <!-- Privacy rule: nothing remote may load. Styles allow inline attributes because Blazor sets style attributes. -->
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src 'self' about:; form-action 'none'; base-uri 'self'; object-src 'none'" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="no-referrer" />
+    <title>AI Export Viewer</title>
+    <base href="/" />
+    <link rel="stylesheet" href="app.css" />
+    <link rel="stylesheet" href="ExportViewer.App.styles.css" />
+    <link rel="icon" href="data:," />
+</head>
+
+<body>
+    <div id="app"><div class="boot">Opening…</div></div>
+
+    <div id="blazor-error-ui" data-nosnippet>
+        Something went wrong in the app. Close and reopen it to continue.
+        <span class="dismiss">✕</span>
+    </div>
+
+    <script src="_framework/blazor.webview.js" autostart="false"></script>
+    <script src="js/app.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,200 @@
+@page "/artifacts/{Id}"
+@using ExportViewer.Core.Artifacts
+@inherits PageBase
+
+@if (_a is null)
+{
+    <div class="empty">@(Session.IsReady ? "This artifact is not in the export." : "Open an export first.")</div>
+    return;
+}
+
+<div class="page-head">
+    <div>
+        <h1>@(_a.Summary.Title ?? "(untitled)")</h1>
+        <p class="subtle">
+            @Artifacts.KindLabel(_a.Summary.Kind) · owned by <a href="@($"users/{_a.Summary.OwnerUuid}")">@(_a.Summary.OwnerName ?? "unknown")</a>
+            · @Artifacts.VisibilityLabel(_a.Summary.Visibility) · updated @When(_a.Summary.UpdatedAt)
+        </p>
+    </div>
+    <button @onclick='() => Nav.NavigateTo("artifacts")'>Back to list</button>
+</div>
+
+@if (_a.PageMarkdown is not null)
+{
+    <div class="card">
+        <div class="chart-tools">
+            <h2 style="margin:0">Current version</h2>
+            @if (Expert) { <button class="link small" @onclick="() => _source = !_source">@(_source ? "Show formatted" : "Show source")</button> }
+        </div>
+        <p class="small muted">Only the current text of this page is in the export. Earlier versions are listed below but their text is not included.</p>
+        @if (_source) { <SafeHtml Text="@_a.PageMarkdown" Plain="true" /> } else { <SafeHtml Text="@ArtifactContent.CleanPageMarkdown(_a.PageMarkdown)" /> }
+    </div>
+}
+else if (_a.Summary.VersionsWithContent == 0)
+{
+    <div class="banner info">The content of this artifact is not included in the export. Only its version history is listed below.</div>
+}
+
+@if (_comments.Count > 0)
+{
+    <h2>Comments (@_comments.Sum(t => t.Comments.Count))</h2>
+    @foreach (var t in _comments)
+    {
+        <div class="card">
+            <div class="small muted">
+                @(t.Resolved ? "Resolved" : "Open")
+                @if (t.Tab is not null) { <span> · tab “@t.Tab”</span> }
+                @if (t.QuotedText is not null) { <span> · on “@t.QuotedText”</span> }
+            </div>
+            @foreach (var c in t.Comments)
+            {
+                <div style="margin-top:.5rem">
+                    <strong>@(c.Author ?? "Someone")</strong> <span class="muted small">@When(c.CreatedAt)</span>
+                    @if (c.ByClaude) { <span class="tag">Posted via Claude</span> }
+                    <SafeHtml Text="@c.Body" Plain="true" />
+                </div>
+            }
+        </div>
+    }
+}
+
+<h2>Versions (@_a.Versions.Count)</h2>
+<div class="table-wrap" style="max-height:260px">
+    <table class="data">
+        <thead><tr><th>Title</th><th>Created</th><th>Content</th>@if (Expert) { <th>Version ID</th> }<th></th></tr></thead>
+        <tbody>
+            @foreach (var v in _a.Versions)
+            {
+                <tr>
+                    <td>
+                        @(v.Title ?? "(untitled)")
+                        @if (v.VersionId == _a.ActiveVersion) { <span class="tag">Current</span> }
+                        @if (!string.IsNullOrWhiteSpace(v.Description)) { <div class="small muted">@v.Description</div> }
+                    </td>
+                    <td class="nowrap">@When(v.CreatedAt)</td>
+                    <td>@(v.ContentFolder is null ? "Not included" : "Included")</td>
+                    @if (Expert) { <td class="mono small">@v.VersionId</td> }
+                    <td class="num">
+                        @if (v.ContentFolder is not null)
+                        {
+                            <button @onclick="() => OpenVersion(v)" disabled="@(_version?.VersionId == v.VersionId)">View</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (_version is not null)
+{
+    <h2>“@(_version.Title ?? _version.VersionId)” files</h2>
+    <div class="split">
+        <div class="card file-list">
+            @foreach (var f in _files)
+            {
+                <button class="@(_file?.Path == f.Path ? "on" : "")" title="@f.Path" @onclick="() => OpenFile(f)">@f.Path</button>
+            }
+        </div>
+        <div>
+            @if (_file is null)
+            {
+                <div class="empty">Choose a file to view it.</div>
+            }
+            else
+            {
+                <div class="card">
+                    <div class="chart-tools">
+                        <strong class="mono small">@_file.Path</strong>
+                        <span class="small muted">
+                            @(_file.Size is { } s ? Fmt.Bytes(s) : "")
+                            @if (Expert && _file.MimeType is not null) { <span> · @_file.MimeType</span> }
+                            @if (Expert && _hashOk is { } ok) { <span class="@(ok ? "" : "status high")"> · @(ok ? "matches the export's checksum" : "does not match the export's checksum")</span> }
+                        </span>
+                    </div>
+                    @if (_text is null)
+                    {
+                        <p class="muted">This file cannot be shown as text (for example a font or image).</p>
+                    }
+                    else if (IsHtml(_file.Path))
+                    {
+                        <div class="tabs">
+                            <button class="@(_htmlTab == 0 ? "on" : "")" @onclick="() => _htmlTab = 0">Safe preview</button>
+                            <button class="@(_htmlTab == 1 ? "on" : "")" @onclick="() => _htmlTab = 1">Source</button>
+                        </div>
+                        @if (_htmlTab == 0)
+                        {
+                            <p class="small muted">Shown with all scripts and internet content blocked, so it may look incomplete or broken. Nothing in it can run.</p>
+                            <iframe class="preview" sandbox="" referrerpolicy="no-referrer" title="Safe preview" srcdoc="@ArtifactContent.PreviewDocument(_text)"></iframe>
+                        }
+                        else
+                        {
+                            <SafeHtml Text="@_text" Plain="true" />
+                        }
+                    }
+                    else if (_file.Path.EndsWith(".md", StringComparison.OrdinalIgnoreCase) && !_source)
+                    {
+                        <SafeHtml Text="@_text" />
+                    }
+                    else
+                    {
+                        <SafeHtml Text="@_text" Plain="true" />
+                    }
+                    @if (_truncated) { <p class="truncated">Only the first @Fmt.Bytes(ArtifactContent.MaxTextBytes) are shown.</p> }
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@if (Expert)
+{
+    <h2>Details</h2>
+    <ExpertDetails Raw="@_a.Raw" Sources="_a.Sources" Note="@($"Folder: {_a.Folder}")" />
+}
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    private ArtifactDetail? _a;
+    private IReadOnlyList<CommentThread> _comments = [];
+    private ArtifactVersionRow? _version;
+    private IReadOnlyList<ArtifactFile> _files = [];
+    private ArtifactFile? _file;
+    private string? _text;
+    private bool _truncated, _source;
+    private bool? _hashOk;
+    private int _htmlTab;
+
+    protected override void LoadData()
+    {
+        _a = Session.Queries.GetArtifact(Id);
+        _version = null;
+        _file = null;
+        if (_a is null) return;
+        _comments = ArtifactContent.ParseComments(_a.CommentsRaw).Concat(ArtifactContent.ParseComments(_a.ArtifactCommentsRaw)).ToList();
+        if (_a.PageMarkdown is null && _a.Versions.FirstOrDefault(v => v.VersionId == _a.ActiveVersion && v.ContentFolder is not null) is { } active)
+            OpenVersion(active);
+    }
+
+    private void OpenVersion(ArtifactVersionRow v)
+    {
+        _version = v;
+        _file = null;
+        _files = Session.Root is { } root && v.ContentFolder is { } folder ? ArtifactContent.ListFiles(root, folder) : [];
+        if (_files.FirstOrDefault(f => f.Path == "index.html") is { } index) OpenFile(index);
+    }
+
+    private void OpenFile(ArtifactFile f)
+    {
+        _file = f;
+        _htmlTab = 0;
+        _hashOk = null;
+        var result = Session.Root is { } root && _version?.ContentFolder is { } folder ? ArtifactContent.ReadText(root, folder, f.Path) : null;
+        _text = result?.Text;
+        _truncated = result?.Truncated ?? false;
+        if (Expert && Session.Root is { } r && _version?.ContentFolder is { } fo) _hashOk = ArtifactContent.VerifyHash(r, fo, f);
+    }
+
+    private static bool IsHtml(string path) => path.EndsWith(".html", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".htm", StringComparison.OrdinalIgnoreCase);
+}

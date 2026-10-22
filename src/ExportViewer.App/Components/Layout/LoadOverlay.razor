@@ -1,0 +1,59 @@
+@using ExportViewer.Core.Loading
+@implements IDisposable
+@inject LibrarySession Session
+
+@if (Session.State == SessionState.Loading)
+{
+    var p = Session.Progress;
+    <div class="overlay" role="dialog" aria-modal="true" aria-labelledby="load-title">
+        <div class="dialog">
+            <h2 id="load-title">Opening the export</h2>
+            <p class="subtle">@StageText(p)</p>
+            <div class="progress" aria-hidden="true"><div style="width:@Percent(p)%"></div></div>
+            @if (p is { Stage: LoadStage.Reading })
+            {
+                <p class="small muted">
+                    File @(Math.Min(p.FilesDone + 1, p.FilesTotal)) of @p.FilesTotal · @Fmt.Bytes(p.BytesDone) of @Fmt.Bytes(p.BytesTotal)
+                    @if (p.Records > 0) { <span> · @Fmt.Plural(p.Records, "conversation", "conversations") read</span> }
+                </p>
+            }
+            <p class="small muted">Everything is read on this computer. Nothing is sent anywhere.</p>
+            <div class="actions">
+                <button @onclick="Session.Cancel">Stop</button>
+            </div>
+        </div>
+    </div>
+}
+else if (Session.State == SessionState.NeedsRebuild)
+{
+    <div class="overlay" role="dialog" aria-modal="true" aria-labelledby="rebuild-title">
+        <div class="dialog">
+            <h2 id="rebuild-title">Some files have changed</h2>
+            <p>Since this folder was last opened, @Fmt.Plural(Session.PendingChanges?.ChangedOrRemoved.Count ?? 0, "file was", "files were") changed or removed.</p>
+            <p class="subtle">To show the folder exactly as it is now, the app needs to read it again. For a large export this can take a few minutes.</p>
+            <div class="actions">
+                <button @onclick="Session.UseExisting">Open what was read last time</button>
+                <button class="primary" @onclick="() => Session.LoadAsync(rebuild: true)">Read the folder again</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    protected override void OnInitialized() => Session.Changed += OnChanged;
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    private static string StageText(LoadProgress? p) => p?.Stage switch
+    {
+        LoadStage.Reading when p.CurrentFile is { } f => $"Reading {Path.GetFileName(f)}…",
+        LoadStage.Finishing => "Checking conversations for gaps and building the search index…",
+        _ => "Looking through the folder…",
+    };
+
+    private static string Percent(LoadProgress? p) =>
+        p is { BytesTotal: > 0 } ? Math.Clamp(100.0 * p.BytesDone / p.BytesTotal, 2, 100).ToString("F0", System.Globalization.CultureInfo.InvariantCulture)
+        : p?.Stage == LoadStage.Finishing ? "100" : "2";
+
+    public void Dispose() => Session.Changed -= OnChanged;
+}

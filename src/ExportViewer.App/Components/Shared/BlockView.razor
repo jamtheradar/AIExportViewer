@@ -1,0 +1,118 @@
+@* Expert view: one content block with every field, clearly labelled by type. *@
+<div class="block @(Block is TextBlock ? "text" : "")">
+    <div class="block-head">
+        <span class="type">@TypeLabel</span>
+        @switch (Block)
+        {
+            case ToolUseBlock u:
+                <span class="mono">@u.Name</span>
+                @if (u.Integration is not null) { <span class="tag">@u.Integration</span> }
+                @if (u.Id is not null) { <span class="muted mono small">@u.Id</span> }
+                break;
+            case ToolResultBlock r:
+                <span class="mono">@r.Name</span>
+                @if (r.IsError) { <span class="status high">Failed</span> }
+                @if (r.ToolUseId is not null) { <span class="muted mono small">for @r.ToolUseId</span> }
+                break;
+            case InjectedBlock i:
+                <span class="tag">@i.Source</span>
+                break;
+        }
+        <span class="muted small" style="margin-left:auto">@Times</span>
+    </div>
+    <div class="block-body">
+        @switch (Block)
+        {
+            case TextBlock t:
+                <SafeHtml Text="@t.Text" />
+                @if (t.Citations.Count > 0)
+                {
+                    <div class="sources">
+                        Citations
+                        <ol>
+                            @foreach (var c in t.Citations)
+                            {
+                                <li><ExtLink Url="@c.Url" /> <span class="muted">characters @c.StartIndex–@c.EndIndex</span></li>
+                            }
+                        </ol>
+                    </div>
+                }
+                break;
+            case ThinkingBlock th:
+                @if (string.IsNullOrEmpty(th.Thinking))
+                {
+                    <p class="muted small">The full thinking text is not included in the export@(th.Summaries.Count > 0 ? "; only these summaries are:" : ".")</p>
+                }
+                else
+                {
+                    <SafeHtml Text="@th.Thinking" Plain="true" />
+                }
+                @if (th.Summaries.Count > 0)
+                {
+                    <ul>@foreach (var s in th.Summaries) { <li>@s</li> }</ul>
+                }
+                @if (th.CutOff) { <p class="status medium">Marked as cut off</p> }
+                break;
+            case ToolUseBlock u:
+                @if (u.Message is not null) { <p class="subtle">@u.Message</p> }
+                @if (u.Input is { } input) { <AllFields Raw="@input.GetRawText()" /> }
+                <DisplayView Display="u.Display" />
+                break;
+            case ToolResultBlock r:
+                @if (r.Message is not null) { <p class="subtle">@r.Message</p> }
+                @foreach (var item in r.Items)
+                {
+                    <div style="margin:.4rem 0">
+                        <span class="tag">@item.Type</span>
+                        @if (item.Title is not null) { <strong> @item.Title</strong> }
+                        @if (item.Url is not null) { <span> — <ExtLink Url="@item.Url" /></span> }
+                        @if (item.FileName is not null) { <span class="mono small"> @item.FileName</span> <span class="muted small">(file not included in export)</span> }
+                        @if (!string.IsNullOrEmpty(item.Text)) { <SafeHtml Text="@item.Text" Plain="true" MaxChars="20000" /> }
+                        <details><summary class="small">All fields</summary><AllFields Raw="@item.Raw" /></details>
+                    </div>
+                }
+                <DisplayView Display="r.Display" />
+                @if (r.StructuredJson is not null) { <details><summary class="small">Structured content</summary><AllFields Raw="@r.StructuredJson" /></details> }
+                @if (r.MetaJson is not null) { <details><summary class="small">Meta</summary><AllFields Raw="@r.MetaJson" /></details> }
+                break;
+            case InjectedBlock i:
+                <p class="muted small">Added to the user's message by Claude (for example from memory). The user did not type this.</p>
+                <SafeHtml Text="@i.Prompt" Plain="true" MaxChars="20000" />
+                break;
+            default:
+                <p class="muted small">A content type this app does not have a special view for yet.</p>
+                <AllFields Raw="@Block.Raw" />
+                break;
+        }
+        @if (Block is not UnknownBlock)
+        {
+            <details><summary class="small">Raw JSON</summary><pre class="raw">@Fmt.PrettyJson(Block.Raw)</pre></details>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Block Block { get; set; } = default!;
+
+    private string TypeLabel => Block switch
+    {
+        TextBlock => "Text",
+        ThinkingBlock => "Thinking",
+        ToolUseBlock => "Tool use",
+        ToolResultBlock => "Tool result",
+        InjectedBlock => "System-added context",
+        _ => Block.Type,
+    };
+
+    private string Times
+    {
+        get
+        {
+            var s = Fmt.Parse(Block.Start);
+            var e = Fmt.Parse(Block.Stop);
+            if (s is null) return "";
+            var start = s.Value.ToLocalTime().ToString("HH:mm:ss");
+            return e is { } stop && stop > s ? $"{start} → {stop.ToLocalTime():HH:mm:ss} ({(stop - s.Value).TotalSeconds:F1}s)" : start;
+        }
+    }
+}

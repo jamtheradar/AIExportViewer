@@ -1,0 +1,51 @@
+@page "/projects"
+@inherits PageBase
+
+<div class="page-head">
+    <div>
+        <h1>Projects</h1>
+        <p class="subtle">Shared workspaces with instructions and knowledge documents. The export does not say which conversations belong to which project.</p>
+    </div>
+</div>
+
+@if (_items.Count == 0)
+{
+    <div class="empty">No projects in this export.</div>
+}
+else
+{
+    <div class="table-wrap">
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>Project</th><th>Created by</th><th class="num">Documents</th><th>Last updated</th>
+                    @if (Expert) { <th>Private</th><th>Created</th><th>ID</th> }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in _items)
+                {
+                    <tr class="clickable" @onclick='() => Nav.NavigateTo($"projects/{p.Uuid}")'>
+                        <td>
+                            <a href="@($"projects/{p.Uuid}")" @onclick:stopPropagation="true">@(string.IsNullOrWhiteSpace(p.Name) ? "(unnamed project)" : p.Name)</a>
+                            @if (p.IsStarter) { <span class="tag">Starter project</span> }
+                            @if (!string.IsNullOrWhiteSpace(p.Description)) { <div class="small muted">@Short(p.Description)</div> }
+                        </td>
+                        <td class="nowrap">@p.CreatorName</td>
+                        <td class="num">@p.Docs</td>
+                        <td class="nowrap">@When(p.UpdatedAt)</td>
+                        @if (Expert) { <td>@(p.IsPrivate ? "Yes" : "No")</td><td class="nowrap small">@When(p.CreatedAt)</td><td class="mono small">@p.Uuid</td> }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<ProjectSummary> _items = [];
+
+    protected override void LoadData() => _items = Session.Queries.GetProjects();
+
+    private static string Short(string s) => s.Length > 140 ? s[..139] + "…" : s;
+}

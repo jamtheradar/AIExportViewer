@@ -1,0 +1,112 @@
+@page "/conversations"
+@inherits PageBase
+
+<div class="page-head">
+    <div>
+        <h1>Conversations</h1>
+        <p class="subtle">Every conversation in the export. Click one to read it.</p>
+    </div>
+</div>
+
+<div class="filters" role="search">
+    <label>Person
+        <select @bind="_user" @bind:after="Apply">
+            <option value="">Everyone</option>
+            @foreach (var u in _users)
+            {
+                <option value="@u.Uuid">@u.DisplayName</option>
+            }
+        </select>
+    </label>
+    <label>From <input type="date" @bind="_from" @bind:after="Apply" /></label>
+    <label>To <input type="date" @bind="_to" @bind:after="Apply" /></label>
+    <label>Title contains <input type="text" @bind="_title" @bind:event="oninput" @bind:after="Apply" placeholder="Any" /></label>
+    <label>Completeness
+        <select @bind="_flag" @bind:after="Apply">
+            <option value="0">Any</option>
+            <option value="3">Possibly incomplete</option>
+            <option value="2">Needs a check</option>
+            @if (Expert) { <option value="1">Any note</option> }
+        </select>
+    </label>
+    <label>Sort
+        <select @bind="_sort" @bind:after="Apply">
+            <option value="@ConversationSort.Newest">Newest first</option>
+            <option value="@ConversationSort.Oldest">Oldest first</option>
+            <option value="@ConversationSort.Longest">Longest first</option>
+            <option value="@ConversationSort.Shortest">Shortest first</option>
+            <option value="@ConversationSort.TitleAz">Title A–Z</option>
+        </select>
+    </label>
+    <label class="check"><input type="checkbox" @bind="_files" @bind:after="Apply" /> Has files</label>
+    <label class="check"><input type="checkbox" @bind="_tools" @bind:after="Apply" /> Claude used tools</label>
+    <label class="check"><input type="checkbox" @bind="_edited" @bind:after="Apply" /> Edited or retried</label>
+</div>
+
+<ConversationTable Items="_items" Expert="Expert" />
+<Pager Total="_total" Offset="_offset" OffsetChanged="Page" />
+
+@code {
+    [SupplyParameterFromQuery(Name = "user")] public string? UserParam { get; set; }
+    [SupplyParameterFromQuery(Name = "flag")] public int? FlagParam { get; set; }
+
+    private IReadOnlyList<UserSummary> _users = [];
+    private IReadOnlyList<ConversationListItem> _items = [];
+    private int _total, _offset;
+    private string _user = "";
+    private DateTime? _from, _to;
+    private string _title = "";
+    private int _flag;
+    private ConversationSort _sort;
+    private bool _files, _tools, _edited;
+    private string? _appliedParams;
+
+    protected override void OnParametersSet()
+    {
+        var key = $"{UserParam}|{FlagParam}";
+        if (key != _appliedParams)
+        {
+            _appliedParams = key;
+            _user = UserParam ?? "";
+            _flag = FlagParam ?? 0;
+            _offset = 0;
+        }
+        base.OnParametersSet();
+    }
+
+    protected override void LoadData()
+    {
+        _users = Session.Queries.GetUsers();
+        Query();
+    }
+
+    private void Apply()
+    {
+        _offset = 0;
+        Query();
+    }
+
+    private void Page(int offset)
+    {
+        _offset = offset;
+        Query();
+    }
+
+    private void Query()
+    {
+        if (!Session.IsReady) return;
+        var filter = new ConversationFilter(
+            AccountUuid: _user.Length == 0 ? null : _user,
+            From: _from is { } f ? new DateTimeOffset(f.Date, TimeZoneInfo.Local.GetUtcOffset(f.Date)) : null,
+            To: _to is { } t ? new DateTimeOffset(t.Date.AddDays(1), TimeZoneInfo.Local.GetUtcOffset(t.Date)) : null,
+            TitleContains: _title,
+            HasAttachments: _files,
+            HasToolUse: _tools,
+            HasBranches: _edited,
+            MinIntegrity: (Severity)_flag,
+            Sort: _sort,
+            Limit: 50,
+            Offset: _offset);
+        (_total, _items) = Session.Queries.GetConversations(filter);
+    }
+}

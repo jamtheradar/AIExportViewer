@@ -1,0 +1,136 @@
+@using System.Globalization
+@* Single-series column chart (one hue, no legend needed: the card title names the series), with hover readout and a table view. *@
+<div class="chart">
+    <div class="chart-tools">
+        <div class="readout" aria-live="polite">
+            @if (_hover is { } h && h < Points.Count)
+            {
+                <span><strong>@Label(Points[h].Start)</strong>: @Fmt.Plural(Points[h].Count, Unit.one, Unit.many)</span>
+            }
+            else if (Points.Count > 0)
+            {
+                <span class="muted">Total @Fmt.Plural(Points.Sum(p => p.Count), Unit.one, Unit.many) · hover a bar for detail</span>
+            }
+        </div>
+        <button class="link small" @onclick="() => _table = !_table">@(_table ? "Show chart" : "Show as table")</button>
+    </div>
+    @if (Points.Count == 0)
+    {
+        <div class="empty">No activity in this period.</div>
+    }
+    else if (_table)
+    {
+        <div class="table-wrap" style="max-height:320px">
+            <table class="data">
+                <thead><tr><th>@GrainName</th><th class="num">@Unit.many</th></tr></thead>
+                <tbody>
+                    @foreach (var p in Points)
+                    {
+                        <tr><td>@Label(p.Start)</td><td class="num">@Fmt.N(p.Count)</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else
+    {
+        var max = NiceMax(Points.Max(p => p.Count));
+        var plotW = W - Left - 8;
+        var slot = plotW / Points.Count;
+        var barW = Math.Max(1, slot - 2);
+        var labelEvery = Math.Max(1, (int)Math.Ceiling(Points.Count / 10.0));
+        <svg viewBox="0 0 @W @H" role="img" aria-label="@AriaLabel" @onmouseleave="() => _hover = null">
+            @for (var g = 0; g <= 4; g++)
+            {
+                var y = Top + PlotH - PlotH * g / 4.0;
+                <line class="gridline" x1="@F(Left)" x2="@F(W - 8)" y1="@F(y)" y2="@F(y)" />
+                @SvgText(Left - 6, y + 4, "end", Fmt.N((int)(max * g / 4)))
+            }
+            @for (var i = 0; i < Points.Count; i++)
+            {
+                var idx = i;
+                var p = Points[i];
+                var barH = PlotH * p.Count / max;
+                var x = Left + i * slot + 1;
+                if (p.Count > 0)
+                {
+                    <path class="bar @(_hover is { } hv && hv != idx ? "dim" : "")" d="@BarPath(x, Top + PlotH - barH, barW, barH)" />
+                }
+                <rect class="hit" x="@F(Left + i * slot)" y="@F(Top)" width="@F(slot)" height="@F(PlotH)" @onmouseenter="() => _hover = idx" />
+                if (i % labelEvery == 0)
+                {
+                    @SvgText(x + barW / 2, H - 6, "middle", ShortLabel(p.Start))
+                }
+            }
+        </svg>
+    }
+</div>
+
+@code {
+    public sealed record Point(DateTime Start, int Count);
+    public enum Grain { Day, Week, Month }
+
+    [Parameter, EditorRequired] public IReadOnlyList<Point> Points { get; set; } = [];
+    [Parameter] public Grain By { get; set; }
+    [Parameter] public (string one, string many) Unit { get; set; } = ("message", "messages");
+    [Parameter] public string AriaLabel { get; set; } = "Activity over time";
+
+    private const double W = 820, H = 230, Left = 44, Top = 10, PlotH = 190;
+    private int? _hover;
+    private bool _table;
+
+    private string GrainName => By switch { Grain.Day => "Day", Grain.Week => "Week starting", _ => "Month" };
+
+    private string Label(DateTime d) => By switch
+    {
+        Grain.Day => d.ToString("ddd d MMM yyyy", CultureInfo.CurrentCulture),
+        Grain.Week => "Week of " + d.ToString("d MMM yyyy", CultureInfo.CurrentCulture),
+        _ => d.ToString("MMMM yyyy", CultureInfo.CurrentCulture),
+    };
+
+    private string ShortLabel(DateTime d) => By == Grain.Month ? d.ToString("MMM yy", CultureInfo.CurrentCulture) : d.ToString("d MMM", CultureInfo.CurrentCulture);
+
+    private static int NiceMax(int v)
+    {
+        if (v <= 4) return 4;
+        var mag = Math.Pow(10, Math.Floor(Math.Log10(v)));
+        foreach (var m in new[] { 1, 2, 2.5, 5, 10 })
+            if (m * mag >= v) return (int)Math.Ceiling(m * mag / 4) * 4;
+        return v;
+    }
+
+    /// <summary>Column with 4px rounded top corners, square at the baseline.</summary>
+    private static string BarPath(double x, double y, double w, double h)
+    {
+        var r = Math.Min(4, Math.Min(w / 2, h));
+        return $"M{F(x)},{F(y + h)} V{F(y + r)} Q{F(x)},{F(y)} {F(x + r)},{F(y)} H{F(x + w - r)} Q{F(x + w)},{F(y)} {F(x + w)},{F(y + r)} V{F(y + h)} Z";
+    }
+
+    private static string F(double v) => v.ToString("0.##", CultureInfo.InvariantCulture);
+
+    /// <summary>Razor reserves &lt;text&gt;, so SVG labels are emitted as encoded markup. Content is app-generated (numbers and dates).</summary>
+    private static MarkupString SvgText(double x, double y, string anchor, string content) =>
+        new($"<text class=\"axis-label\" x=\"{F(x)}\" y=\"{F(y)}\" text-anchor=\"{anchor}\">{System.Net.WebUtility.HtmlEncode(content)}</text>");
+
+    /// <summary>Groups timestamps into local-time buckets, filling gaps with zero so time reads evenly.</summary>
+    public static (IReadOnlyList<Point> Points, Grain Grain) Bucket(IEnumerable<DateTimeOffset> times)
+    {
+        var local = times.Select(t => t.ToLocalTime().DateTime).ToList();
+        if (local.Count == 0) return ([], Grain.Day);
+        var min = local.Min().Date;
+        var max = local.Max().Date;
+        var span = (max - min).TotalDays;
+        var grain = span <= 62 ? Grain.Day : span <= 730 ? Grain.Week : Grain.Month;
+        DateTime Key(DateTime d) => grain switch
+        {
+            Grain.Day => d.Date,
+            Grain.Week => d.Date.AddDays(-(((int)d.DayOfWeek + 6) % 7)),
+            _ => new DateTime(d.Year, d.Month, 1),
+        };
+        var counts = local.GroupBy(Key).ToDictionary(g => g.Key, g => g.Count());
+        var points = new List<Point>();
+        for (var k = Key(min); k <= max; k = grain switch { Grain.Day => k.AddDays(1), Grain.Week => k.AddDays(7), _ => k.AddMonths(1) })
+            points.Add(new Point(k, counts.GetValueOrDefault(k)));
+        return (points, grain);
+    }
+}

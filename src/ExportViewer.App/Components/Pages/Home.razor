@@ -1,0 +1,103 @@
+﻿@page "/"
+@inherits PageBase
+@inject FolderPicker Picker
+@inject AppSettings Settings
+
+<div class="page-head">
+    <div>
+        <h1>Review your organisation's Claude export</h1>
+        <p class="subtle">Open the folder where you unzipped the export. Everything stays on this computer; the app never connects to the internet.</p>
+    </div>
+</div>
+
+@if (Session.State == SessionState.Failed && Session.Error is { } error)
+{
+    <div class="banner high" role="alert"><strong>That folder could not be opened.</strong> @error</div>
+}
+
+@if (Session.IsReady && Session.Root is { } root)
+{
+    <div class="card">
+        <h2 style="margin-top:0">Open now</h2>
+        <p class="mono small">@root</p>
+        @if (Session.LastSummary is { } s && s.Files.Sum(f => f.Records) == 0 && s.ZipFiles > 0)
+        {
+            <div class="banner medium">This folder contains @Fmt.Plural(s.ZipFiles, "zip file", "zip files") but no unzipped export data. Unzip them into this folder first, then open it again.</div>
+        }
+        <div style="display:flex;gap:.5rem;margin-top:.6rem">
+            <button class="primary" @onclick='() => Nav.NavigateTo("overview")'>Go to the overview</button>
+            <button @onclick="Session.Close">Close this export</button>
+        </div>
+    </div>
+}
+
+<div class="card">
+    <h2 style="margin-top:0">Open an export</h2>
+    <p>Choose the folder that holds the unzipped export files (folders such as <span class="mono">conversations-000</span> and <span class="mono">projects-000</span>).
+        It can hold one export or several, for example one per month. They are combined into one complete history automatically.</p>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.8rem">
+        <button class="primary" @onclick="PickAsync" disabled="@_busy">Choose folder…</button>
+        <input type="text" style="flex:1;min-width:260px" placeholder="…or paste a folder path here" @bind="_path" @bind:event="oninput" @onkeydown="OnKey" aria-label="Folder path" />
+        <button @onclick="() => OpenAsync(_path)" disabled="@(_busy || string.IsNullOrWhiteSpace(_path))">Open</button>
+    </div>
+    <p class="small muted" style="margin-top:.6rem">Shortcut: Ctrl+O (⌘O on Mac). The export files are only read, never changed.</p>
+</div>
+
+@if (Settings.Data.Recent.Count > 0)
+{
+    <div class="card">
+        <h2 style="margin-top:0">Recently opened</h2>
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>Folder</th><th>Last opened</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var r in Settings.Data.Recent)
+                    {
+                        <tr>
+                            <td class="mono small">@r.Path</td>
+                            <td class="nowrap">@r.LastOpened.ToLocalTime().ToString("d MMM yyyy, h:mm tt")</td>
+                            <td class="num">
+                                <button @onclick="() => OpenAsync(r.Path)" disabled="@_busy">Open</button>
+                                <button class="link" style="margin-left:.6rem" @onclick="() => Forget(r)">Remove from list</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <p class="small muted">Only folder locations are remembered here, not any content.</p>
+    </div>
+}
+
+@code {
+    private string _path = "";
+    private bool _busy;
+
+    private async Task PickAsync()
+    {
+        var path = await Picker.PickAsync();
+        if (path is not null) await OpenAsync(path);
+    }
+
+    private async Task OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_path)) await OpenAsync(_path);
+    }
+
+    private async Task OpenAsync(string path)
+    {
+        _busy = true;
+        try
+        {
+            await Session.OpenAsync(path.Trim().Trim('"'));
+            if (Session.IsReady && !(Session.LastSummary is { } s && s.Files.Sum(f => f.Records) == 0 && s.ZipFiles > 0))
+                Nav.NavigateTo("overview");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Forget(RecentLibrary r) => Settings.Update(d => d.Recent.Remove(r));
+}

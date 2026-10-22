@@ -1,0 +1,64 @@
+@page "/artifacts"
+@inherits PageBase
+
+<div class="page-head">
+    <div>
+        <h1>Artifacts &amp; pages</h1>
+        <p class="subtle">Things people made with Claude: documents (pages), slide decks, designs and small apps.</p>
+    </div>
+</div>
+
+@if (_items.Count == 0)
+{
+    <div class="empty">No artifacts or pages in this export.</div>
+}
+else
+{
+    <div class="table-wrap">
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>Title</th><th>Type</th><th>Owner</th><th>Shared</th><th class="num">Versions</th><th>Content in export</th><th>Last updated</th>
+                    @if (Expert) { <th>ID</th> }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var a in _items)
+                {
+                    <tr class="clickable" @onclick='() => Nav.NavigateTo($"artifacts/{a.Id}")'>
+                        <td><a href="@($"artifacts/{a.Id}")" @onclick:stopPropagation="true">@(a.Title ?? "(untitled)")</a></td>
+                        <td>@KindLabel(a.Kind)</td>
+                        <td class="nowrap">@a.OwnerName</td>
+                        <td>@VisibilityLabel(a.Visibility)</td>
+                        <td class="num">@a.Versions</td>
+                        <td>@ContentLabel(a)</td>
+                        <td class="nowrap">@When(a.UpdatedAt)</td>
+                        @if (Expert) { <td class="mono small">@a.Id</td> }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<ArtifactSummary> _items = [];
+
+    protected override void LoadData() => _items = Session.Queries.GetArtifacts();
+
+    internal static string KindLabel(string? kind) => kind switch { "page" => "Page (document)", "artifact" => "Artifact", _ => kind ?? "—" };
+
+    internal static string VisibilityLabel(string? v) => v switch
+    {
+        "private" => "Private",
+        "organization" => "Whole organisation",
+        "invited" => "Invited people",
+        _ => v ?? "—",
+    };
+
+    internal static string ContentLabel(ArtifactSummary a) =>
+        a.HasPage ? "Current version"
+        : a.VersionsWithContent == 0 ? "Not included"
+        : a.VersionsWithContent == a.Versions ? "All versions"
+        : $"{a.VersionsWithContent} of {a.Versions} versions";
+}

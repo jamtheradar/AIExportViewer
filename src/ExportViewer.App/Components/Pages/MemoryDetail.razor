@@ -1,0 +1,92 @@
+@page "/memories/{Id}"
+@inherits PageBase
+
+@if (_m is null)
+{
+    <div class="empty">@(Session.IsReady ? "There is no memory for this person in the export." : "Open an export first.")</div>
+    return;
+}
+
+<div class="page-head">
+    <div>
+        <h1>What Claude remembers about @(_name ?? "this person")</h1>
+        <p class="subtle">Saved memory as of @When(_m.SnapshotAt)</p>
+    </div>
+    <button @onclick='() => Nav.NavigateTo("memories")'>Back to memories</button>
+</div>
+
+@if (Expert && _snapshots.Count > 1)
+{
+    <div class="filters">
+        <label>Snapshot (one per export)
+            <select @bind="_selected" @bind:after="Select">
+                @foreach (var s in _snapshots)
+                {
+                    <option value="@s.Id">@When(s.SnapshotAt) — @s.SourcePath</option>
+                }
+            </select>
+        </label>
+    </div>
+}
+else if (_snapshots.Count > 1)
+{
+    <p class="small muted">Showing the newest of @_snapshots.Count saved versions. Switch to Expert view to compare them.</p>
+}
+
+@if (!string.IsNullOrWhiteSpace(_m.ConversationsMemory))
+{
+    <div class="card"><h2 style="margin-top:0">Summary memory</h2><SafeHtml Text="@_m.ConversationsMemory" /></div>
+}
+
+@if (_m.Files.Count > 0)
+{
+    <h2>Memory files (@_m.Files.Count)</h2>
+    @foreach (var f in _m.Files.OrderBy(f => f.Path, StringComparer.OrdinalIgnoreCase))
+    {
+        <details class="card">
+            <summary><span class="mono">@f.Path</span> <span class="muted small"> · updated @When(f.UpdatedAt)</span></summary>
+            <SafeHtml Text="@f.Content" />
+        </details>
+    }
+}
+
+@if (_m.ProjectMemories.Count > 0)
+{
+    <h2>Project memories</h2>
+    @foreach (var p in _m.ProjectMemories)
+    {
+        <details class="card">
+            <summary>Project: <a href="@($"projects/{p.ProjectUuid}")" @onclick:stopPropagation="true">@(_projects.GetValueOrDefault(p.ProjectUuid) ?? p.ProjectUuid)</a></summary>
+            <SafeHtml Text="@p.Content" />
+        </details>
+    }
+}
+
+@if (Expert)
+{
+    <h2>Details</h2>
+    <ExpertDetails Raw="@_m.Raw" Sources="@_snapshots.Select(s => s.SourcePath).ToList()" />
+}
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    private MemoryRecord? _m;
+    private IReadOnlyList<MemorySnapshotRow> _snapshots = [];
+    private long _selected;
+    private string? _name;
+    private Dictionary<string, string> _projects = new();
+
+    protected override void LoadData()
+    {
+        var q = Session.Queries;
+        _snapshots = q.GetMemorySnapshots(Id);
+        _name = q.GetUserNames().GetValueOrDefault(Id);
+        _projects = q.GetProjects().ToDictionary(p => p.Uuid, p => string.IsNullOrWhiteSpace(p.Name) ? "(unnamed project)" : p.Name!);
+        if (_snapshots.Count == 0) { _m = null; return; }
+        _selected = _snapshots[0].Id;
+        Select();
+    }
+
+    private void Select() => _m = Session.Queries.GetMemorySnapshot(_selected);
+}
