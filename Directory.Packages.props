@@ -7,7 +7,7 @@
   <ItemGroup>
     <PackageVersion Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="5.6.0" />
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.13" />
-    <PackageVersion Include="Markdig" Version="1.4.2" />
+    <PackageVersion Include="Markdig" Version="1.5.1" />
     <PackageVersion Include="HtmlSanitizer" Version="9.2.1039" />
     <!-- 6.2.4 is the last MIT-licensed release; 6.5 and later are AGPL. Do not upgrade without the owner's approval. -->
     <PackageVersion Include="PDFsharp-MigraDoc" Version="6.2.4" />
